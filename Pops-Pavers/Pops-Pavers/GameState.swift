@@ -27,7 +27,6 @@ class GameState {
     }
     
     // MARK: - Level generation (simple layered + some randomness)
-    // MARK: - Level Generation (controlled complexity)
 
     private func generateLevel() -> [BoardTile] {
         var tiles: [BoardTile] = []
@@ -36,69 +35,74 @@ class GameState {
             tiles.append(BoardTile(type: type, row: row, col: col, layer: layer))
         }
         
-        // We work on a conceptual 6x5 grid of positions
-        // Each tile still occupies one "slot" but we offset them for overlaps
+        // Create a balanced pool (multiples of 3)
+        var typePool: [TileType] = []
+        for type in TileType.allCases {
+            let count = 3 * Int.random(in: 1...2)   // 3 or 6 of each
+            typePool += Array(repeating: type, count: count)
+        }
+        typePool.shuffle()
         
-        let patterns: [[(row: Int, col: Int, layer: Int)]] = [
-            // Pattern A – classic stack + side overlap
-            [
-                (1,1,0), (1,2,0), (1,3,0),
-                (2,1,0), (2,2,0),
-                (1,2,1), (2,2,1)          // two tiles sitting on top with overlap
-            ],
-            // Pattern B – wider base with corner sits
-            [
-                (0,0,0), (0,1,0), (0,2,0), (0,3,0),
-                (1,0,0), (1,1,0), (1,2,0),
-                (0,1,1), (1,1,1)          // overlapping upper layer
-            ],
-            // Pattern C – more vertical
-            [
-                (0,2,0), (1,1,0), (1,2,0), (1,3,0),
-                (2,1,0), (2,2,0), (2,3,0),
-                (1,2,1), (2,2,1)
-            ]
+        var index = 0
+        func nextType() -> TileType {
+            defer { index += 1 }
+            return typePool[index % typePool.count]
+        }
+        
+        // ===== One solid layout for now (we can expand later) =====
+        // Layer 0 - solid base
+        for row in 0...3 {
+            for col in 0...5 {
+                if (row == 0 || row == 3) && (col == 0 || col == 5) { continue } // slightly shape it
+                add(nextType(), row: row, col: col, layer: 0)
+            }
+        }
+        
+        // Layer 1 - offset stacks
+        let layer1Positions = [
+            (0,2), (0,3),
+            (1,1), (1,2), (1,3), (1,4),
+            (2,1), (2,2), (2,3), (2,4),
+            (3,2), (3,3)
         ]
         
-        // Pick 1 or 2 patterns and merge them with an offset
-        let chosen = patterns.shuffled().prefix(Int.random(in: 1...2))
+        for pos in layer1Positions {
+            if index < typePool.count {
+                add(nextType(), row: pos.0, col: pos.1, layer: 1)
+            }
+        }
         
-        var typePool = TileType.allCases.shuffled()
-        var typeIndex = 0
-        
-        for (patternIndex, pattern) in chosen.enumerated() {
-            let rowOffset = patternIndex * 3
-            let colOffset = patternIndex * 1
-            
-            for pos in pattern {
-                let type = typePool[typeIndex % typePool.count]
-                typeIndex += 1
-                add(type, row: pos.row + rowOffset, col: pos.col + colOffset, layer: pos.layer)
+        // Layer 2 - top pieces
+        let layer2Positions = [(1,2), (1,3), (2,2), (2,3)]
+        for pos in layer2Positions {
+            if index < typePool.count {
+                add(nextType(), row: pos.0, col: pos.1, layer: 2)
             }
         }
         
         return tiles
     }
+    
+    
     // MARK: - Free tile logic
     private func updateFreeTiles() {
         for i in board.indices {
             let tile = board[i]
             
-            // Strict for now: only blocked by a higher tile on the exact same cell
-            // (We can expand this later once the visuals are solid)
             let isCovered = board.contains { other in
-                other.id != tile.id &&
-                other.row == tile.row &&
-                other.col == tile.col &&
-                other.layer > tile.layer
+                guard other.id != tile.id && other.layer > tile.layer else { return false }
+                
+                // Higher tile blocks a small area (allows one tile to cover multiple below)
+                let rowDiff = abs(other.row - tile.row)
+                let colDiff = abs(other.col - tile.col)
+                
+                return rowDiff <= 1 && colDiff <= 1
             }
             
             board[i].isFree = !isCovered
         }
     }
     
-    
-   
     
     func select(_ tile: BoardTile) {
         guard !isGameOver,

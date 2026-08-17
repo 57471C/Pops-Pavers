@@ -3,7 +3,9 @@ import SwiftUI
 struct GameView: View {
     @State private var game = GameState()
     
-    private let tileSize: CGFloat = 72
+    private let tileSize: CGFloat = 74
+    private let cellSpacing: CGFloat = 56     // ~75% of tile size → nice partial overlap
+    
     private func selectTile(_ tile: BoardTile) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
             game.select(tile)
@@ -19,8 +21,8 @@ struct GameView: View {
             
             ZStack {
                 ForEach(game.board.sorted(by: { $0.layer < $1.layer })) { tile in
-                    let xOffset = CGFloat(tile.col - 1) * (tileSize * 1.35 + 12) + CGFloat(tile.layer) * 8
-                    let yOffset = CGFloat(tile.row - 1) * (tileSize + 14) - CGFloat(tile.layer) * 11
+                    let xOffset = CGFloat(tile.col) * cellSpacing + CGFloat(tile.layer) * 6
+                    let yOffset = CGFloat(tile.row) * cellSpacing - CGFloat(tile.layer) * 8
                     
                     TileView(tile: tile, size: tileSize)
                         .offset(x: xOffset, y: yOffset)
@@ -31,7 +33,7 @@ struct GameView: View {
                         }
                 }
             }
-            .frame(width: 4 * (tileSize * 1.35 + 12), height: 3 * (tileSize + 14) + 20)
+            .frame(width: 8 * cellSpacing + 40, height: 7 * cellSpacing + 40)
             
             Spacer()
             
