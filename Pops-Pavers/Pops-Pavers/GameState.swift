@@ -27,47 +27,78 @@ class GameState {
     }
     
     // MARK: - Level generation (simple layered + some randomness)
+    // MARK: - Level Generation (controlled complexity)
+
     private func generateLevel() -> [BoardTile] {
         var tiles: [BoardTile] = []
         
-        // Base layer (layer 0)
-        let baseTypes = TileType.allCases.shuffled()
-        for row in 0..<rows {
-            for col in 0..<columns {
-                let type = baseTypes[(row * columns + col) % baseTypes.count]
-                tiles.append(BoardTile(type: type, row: row, col: col, layer: 0))
+        func add(_ type: TileType, row: Int, col: Int, layer: Int) {
+            tiles.append(BoardTile(type: type, row: row, col: col, layer: layer))
+        }
+        
+        // We work on a conceptual 6x5 grid of positions
+        // Each tile still occupies one "slot" but we offset them for overlaps
+        
+        let patterns: [[(row: Int, col: Int, layer: Int)]] = [
+            // Pattern A – classic stack + side overlap
+            [
+                (1,1,0), (1,2,0), (1,3,0),
+                (2,1,0), (2,2,0),
+                (1,2,1), (2,2,1)          // two tiles sitting on top with overlap
+            ],
+            // Pattern B – wider base with corner sits
+            [
+                (0,0,0), (0,1,0), (0,2,0), (0,3,0),
+                (1,0,0), (1,1,0), (1,2,0),
+                (0,1,1), (1,1,1)          // overlapping upper layer
+            ],
+            // Pattern C – more vertical
+            [
+                (0,2,0), (1,1,0), (1,2,0), (1,3,0),
+                (2,1,0), (2,2,0), (2,3,0),
+                (1,2,1), (2,2,1)
+            ]
+        ]
+        
+        // Pick 1 or 2 patterns and merge them with an offset
+        let chosen = patterns.shuffled().prefix(Int.random(in: 1...2))
+        
+        var typePool = TileType.allCases.shuffled()
+        var typeIndex = 0
+        
+        for (patternIndex, pattern) in chosen.enumerated() {
+            let rowOffset = patternIndex * 3
+            let colOffset = patternIndex * 1
+            
+            for pos in pattern {
+                let type = typePool[typeIndex % typePool.count]
+                typeIndex += 1
+                add(type, row: pos.row + rowOffset, col: pos.col + colOffset, layer: pos.layer)
             }
         }
         
-        // Add a second layer on some positions (randomly)
-        let extraCount = Int.random(in: 4...7)
-        for _ in 0..<extraCount {
-            let row = Int.random(in: 0..<rows)
-            let col = Int.random(in: 0..<columns)
-            let type = TileType.allCases.randomElement()!
-            tiles.append(BoardTile(type: type, row: row, col: col, layer: 1))
-        }
-        
-        // Make sure we have multiples of 3 overall (roughly)
-        // (We'll keep it simple for now)
-        
         return tiles
     }
-    
     // MARK: - Free tile logic
     private func updateFreeTiles() {
         for i in board.indices {
             let tile = board[i]
-            // A tile is free if no other tile is on the same position with a higher layer
+            
+            // Strict for now: only blocked by a higher tile on the exact same cell
+            // (We can expand this later once the visuals are solid)
             let isCovered = board.contains { other in
                 other.id != tile.id &&
                 other.row == tile.row &&
                 other.col == tile.col &&
                 other.layer > tile.layer
             }
+            
             board[i].isFree = !isCovered
         }
     }
+    
+    
+   
     
     func select(_ tile: BoardTile) {
         guard !isGameOver,

@@ -20,8 +20,11 @@ enum TileType: String, CaseIterable, Identifiable {
 struct BoardTile: Identifiable, Equatable {
     let id = UUID()
     let type: TileType
-    let row: Int
+    let row: Int          // top-left cell of the 2x2 paver
     let col: Int
-    let layer: Int          // higher number = more on top
+    let layer: Int
     var isFree: Bool = true
+    
+    // Every paver is 2x2
+    let size = 2
 }

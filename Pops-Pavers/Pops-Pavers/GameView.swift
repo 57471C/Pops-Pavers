@@ -4,6 +4,11 @@ struct GameView: View {
     @State private var game = GameState()
     
     private let tileSize: CGFloat = 72
+    private func selectTile(_ tile: BoardTile) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            game.select(tile)
+        }
+    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -12,27 +17,21 @@ struct GameView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             
-            // Board with layers
             ZStack {
                 ForEach(game.board.sorted(by: { $0.layer < $1.layer })) { tile in
+                    let xOffset = CGFloat(tile.col - 1) * (tileSize * 1.35 + 12) + CGFloat(tile.layer) * 8
+                    let yOffset = CGFloat(tile.row - 1) * (tileSize + 14) - CGFloat(tile.layer) * 11
+                    
                     TileView(tile: tile, size: tileSize)
-                        .opacity(tile.isFree ? 1.0 : 0.35)
-                        .offset(
-                            x: CGFloat(tile.col - 1) * (tileSize + 12) + CGFloat(tile.layer) * 6,
-                            y: CGFloat(tile.row - 1) * (tileSize + 12) - CGFloat(tile.layer) * 8
-                        )
+                        .offset(x: xOffset, y: yOffset)
                         .zIndex(Double(tile.layer))
-                        
                         .onTapGesture {
                             guard tile.isFree else { return }
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                                game.select(tile)
-                            }
+                            selectTile(tile)
                         }
                 }
             }
-            .frame(height: 280)
-            .padding(.vertical)
+            .frame(width: 4 * (tileSize * 1.35 + 12), height: 3 * (tileSize + 14) + 20)
             
             Spacer()
             
@@ -73,16 +72,39 @@ struct GameView: View {
 
 struct TileView: View {
     let tile: BoardTile
-    let size: CGFloat
+    let size: CGFloat          // we'll treat this as the short side
+    
+    // Make pavers more rectangular (wider than tall)
+    private var width: CGFloat { size * 1.35 }
+    private var height: CGFloat { size }
+    private var corner: CGFloat { 10 }
     
     var body: some View {
-        Text(tile.type.symbol)
-            .font(.system(size: size * 0.55))
-            .frame(width: size, height: size)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
-            )
+        ZStack {
+            // Bottom / side thickness (the dark edge in your sketch)
+            RoundedRectangle(cornerRadius: corner)
+                .fill(Color(white: 0.25))
+                .frame(width: width, height: height)
+                .offset(x: 3, y: 4)
+            
+            // Main face
+            RoundedRectangle(cornerRadius: corner)
+                .fill(
+                    tile.isFree
+                    ? Color(red: 0.92, green: 0.90, blue: 0.86)   // warm light stone
+                    : Color(white: 0.62)                          // darker when covered
+                )
+                .frame(width: width, height: height)
+                .overlay(
+                    RoundedRectangle(cornerRadius: corner)
+                        .stroke(Color(white: 0.15), lineWidth: 2.2)
+                )
+            
+            // Emoji
+            Text(tile.type.symbol)
+                .font(.system(size: size * 0.48))
+                .opacity(tile.isFree ? 1.0 : 0.5)
+        }
+        .frame(width: width, height: height)
     }
 }
