@@ -3,6 +3,8 @@ import SwiftUI
 struct TitleView: View {
     let onPlay: () -> Void
     
+    @State private var audio = AudioManager.shared
+    
     @State private var titleOffset: CGFloat = -450
     @State private var titleScale: CGFloat = 0.85
     @State private var lillyOffset: CGFloat = -500
@@ -17,10 +19,10 @@ struct TitleView: View {
                 .scaledToFill()
                 .ignoresSafeArea()
             
+            // Title + Button column
             VStack {
                 Spacer().frame(height: 50)
                 
-                // Title
                 Image("title-text")
                     .resizable()
                     .scaledToFit()
@@ -30,8 +32,11 @@ struct TitleView: View {
                 
                 Spacer()
                 
-                // PLAY button
-                Button(action: onPlay) {
+                Button(action: {
+                    audio.playPlayButton()
+                    audio.playGameplayMusic()
+                    onPlay()
+                }) {
                     Text("PLAY")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
@@ -59,7 +64,7 @@ struct TitleView: View {
                 .padding(.bottom, 40)
             }
             
-            // Lilly-1 (pink zone - bottom left)
+            // Lilly (bottom left)
             VStack {
                 Spacer()
                 HStack {
@@ -74,7 +79,7 @@ struct TitleView: View {
                 .padding(.bottom, 30)
             }
             
-            // Pop (red zone - bottom right) - 2x larger
+            // Pop (bottom right)
             VStack {
                 Spacer()
                 HStack {
@@ -83,41 +88,38 @@ struct TitleView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(height: 680)
-                        .offset(x: popOffset + 12)      // a few px to the right
+                        .offset(x: popOffset + 12)
                         .padding(.trailing, 10)
                 }
-                .padding(.bottom, -10)                 // drop him ~10px lower
+                .padding(.bottom, -10)
             }
         }
         .onAppear {
-            // Title drop
+            audio.playTitleMusic()
+            
             withAnimation(.spring(response: 0.75, dampingFraction: 0.55)) {
                 titleOffset = -20
                 titleScale = 1.0
             }
             
-            // Lilly slides in from left
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 withAnimation(.spring(response: 0.75, dampingFraction: 0.7)) {
                     lillyOffset = 0
                 }
             }
             
-            // Pop slides in from right
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 withAnimation(.spring(response: 0.75, dampingFraction: 0.68)) {
                     popOffset = 0
                 }
             }
             
-            // Button
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
                 withAnimation(.easeOut(duration: 0.5)) {
                     buttonOpacity = 1.0
                 }
             }
             
-            // Occasional title bounce
             Timer.scheduledTimer(withTimeInterval: 4.2, repeats: true) { _ in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
                     titleScale = 1.05
