@@ -86,4 +86,8 @@ class AudioManager {
     func playLevelWin()    { playSFX("level-win") }
     func playLevelLose()   { playSFX("level-lose") }
     func playApplause()    { playSFX("win-applause") }
+    func playGameOver() {
+        stopMusic()
+        playSFX("game-over")
+    }
 }

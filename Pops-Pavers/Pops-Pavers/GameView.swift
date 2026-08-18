@@ -99,26 +99,22 @@ struct GameView: View {
                         .ignoresSafeArea()
                     
                     VStack(spacing: 28) {
-                        Image(game.didWin ? "level-complete" : "game-over")
+                        Image(overlayImageName)
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: 420)
                         
+                        if game.isNewHighScore && (game.didWin || game.lives <= 0) {
+                            Text("New High Score!")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundColor(Color(red: 1.0, green: 0.85, blue: 0.25))
+                                .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                        }
+                        
                         Button {
-                            audio.playButton()
-                            if game.lives <= 0 {
-                                audio.stopMusic()
-                                game.fullReset()
-                                withAnimation {
-                                    onExitToTitle()
-                                }
-                            } else {
-                                withAnimation {
-                                    game.restart()
-                                }
-                            }
+                            handleOverlayButton()
                         } label: {
-                            Text(game.didWin ? "Next Level" : "Title")
+                            Text(overlayButtonTitle)
                                 .font(.title2.bold())
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 44)
@@ -135,28 +131,42 @@ struct GameView: View {
             }
         }
         .overlay(alignment: .top) {
-            HStack {
+            VStack(spacing: 6) {
+                ZStack {
+                    HStack {
+                        Text("LEVEL \(game.level)")
+                            .font(.headline.bold())
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Button {
+                            audio.isMusicMuted.toggle()
+                            audio.playButton()
+                        } label: {
+                            Image(audio.isMusicMuted ? "unmute" : "mute")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 46, height: 46)
+                                .padding(6)
+                                .background(
+                                    Circle()
+                                        .fill(Color.black.opacity(0.4))
+                                )
+                        }
+                    }
+                    
+                    Text("\(game.score)")
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                }
+                
                 Text(game.statusMessage.isEmpty ? "Match 3 tiles!" : game.statusMessage)
-                    .font(.title3.bold())
+                    .font(.subheadline.bold())
                     .foregroundColor(.white)
                     .lineLimit(1)
-                
-                Spacer()
-                
-                Button {
-                    audio.isMusicMuted.toggle()
-                    audio.playButton()
-                } label: {
-                    Image(audio.isMusicMuted ? "unmute" : "mute")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 46, height: 46)
-                        .padding(6)
-                        .background(
-                            Circle()
-                                .fill(Color.black.opacity(0.4))
-                        )
-                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)
@@ -164,6 +174,42 @@ struct GameView: View {
             .frame(maxWidth: .infinity)
             .background(Color.black.opacity(0.35))
             .padding(.top, 70)
+        }
+        .onChange(of: game.lives) { _, lives in
+            if lives <= 0 && game.isGameOver && !game.didWin {
+                audio.playGameOver()
+            }
+        }
+    }
+    
+    private var overlayImageName: String {
+        if game.didWin { return "level-complete" }
+        if game.lives <= 0 { return "game-over" }
+        return "level-failed"
+    }
+    
+    private var overlayButtonTitle: String {
+        if game.didWin { return "Next Level" }
+        if game.lives <= 0 { return "Back to Title" }
+        return "Try Again"
+    }
+    
+    private func handleOverlayButton() {
+        if game.didWin {
+            audio.playButton()
+            withAnimation {
+                game.advanceToNextLevel()
+            }
+        } else if game.lives <= 0 {
+            game.fullReset()
+            withAnimation {
+                onExitToTitle()
+            }
+        } else {
+            audio.playButton()
+            withAnimation {
+                game.loseLifeAndRestart()
+            }
         }
     }
     
@@ -184,7 +230,7 @@ struct GameView: View {
                 if game.didWin {
                     audio.playLevelWin()
                     audio.playApplause()
-                } else {
+                } else if game.lives > 0 {
                     audio.playLevelLose()
                 }
             }

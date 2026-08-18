@@ -10,6 +10,7 @@ struct TitleView: View {
     @State private var lillyOffset: CGFloat = -500
     @State private var popOffset: CGFloat = 600
     @State private var buttonOpacity: Double = 0
+    @State private var highScore = UserDefaults.standard.integer(forKey: "highScore")
     
     var body: some View {
         ZStack {
@@ -31,6 +32,13 @@ struct TitleView: View {
                     .scaleEffect(titleScale)
                 
                 Spacer()
+                
+                Text("High Score: \(highScore)")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.55), radius: 4, y: 2)
+                    .opacity(buttonOpacity)
+                    .padding(.bottom, 14)
                 
                 Button(action: {
                     audio.playPlayButton()
@@ -95,6 +103,7 @@ struct TitleView: View {
             }
         }
         .onAppear {
+            highScore = UserDefaults.standard.integer(forKey: "highScore")
             audio.playTitleMusic()
             
             withAnimation(.spring(response: 0.75, dampingFraction: 0.55)) {

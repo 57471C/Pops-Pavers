@@ -11,84 +11,141 @@ class GameState {
     var shufflesRemaining = 2
     var justMatched = false
     var lives = 3
+    var score = 0
+    var level = 1
+    var highScore = 0
+    var isNewHighScore = false
     
     let maxTraySize = 7
+    private static let highScoreKey = "highScore"
+    
+    var availableIconCount: Int {
+        min(20, 5 + (level - 1) / 5)
+    }
     
     init() {
+        highScore = UserDefaults.standard.integer(forKey: Self.highScoreKey)
         startNewLevel()
     }
     
+    func updateHighScoreIfNeeded() {
+        guard score > highScore else { return }
+        highScore = score
+        isNewHighScore = true
+        UserDefaults.standard.set(highScore, forKey: Self.highScoreKey)
+    }
+    
     func startNewLevel() {
-        board = generateLevel()
+        board = generateLevel(iconCount: availableIconCount)
         updateFreeTiles()
         tray = []
-        statusMessage = "Only free (bright) tiles can be selected"
+        statusMessage = "Level \(level) – match 3 tiles"
         isGameOver = false
         didWin = false
         shufflesRemaining = 2
         justMatched = false
-        // don’t reset lives here – only reset on full restart / returning to title
+        // don’t reset lives or score here – only reset on full restart / returning to title
     }
     
     // MARK: - Level generation
-    private func generateLevel() -> [BoardTile] {
-        var tiles: [BoardTile] = []
-        
-        func add(icon: String, paver: String, row: Int, col: Int, layer: Int) {
-            tiles.append(BoardTile(iconName: icon, paverName: paver, row: row, col: col, layer: layer))
-        }
-        
-        // Balanced pool – every icon in multiples of 3
-        var typePool: [String] = []
-        let availableIcons = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5"]
-        
-        for icon in availableIcons {
-            let count = 3 * Int.random(in: 1...3) // 3, 6 or 9
-            typePool += Array(repeating: icon, count: count)
-        }
-        typePool.shuffle()
-        
-        var iconIndex = 0
-        func nextIcon() -> String {
-            let icon = typePool[iconIndex % typePool.count]
-            iconIndex += 1
-            return icon
-        }
-        
+    private func generateLevel(iconCount: Int) -> [BoardTile] {
+        let positions = layoutPositions(for: level)
+        let icons = balancedIconPool(tileCount: positions.count, iconCount: iconCount)
         let pavers = (1...6).map { "paver-\($0)" }
         
-        // Layer 0
-        for row in 0...3 {
-            for col in 0...5 {
-                if (row == 0 || row == 3) && (col == 0 || col == 5) { continue }
-                add(icon: nextIcon(),
-                    paver: pavers.randomElement()!,
-                    row: row, col: col, layer: 0)
+        return zip(positions, icons).map { pos, icon in
+            BoardTile(
+                iconName: icon,
+                paverName: pavers.randomElement()!,
+                row: pos.row,
+                col: pos.col,
+                layer: pos.layer
+            )
+        }
+    }
+    
+    private func balancedIconPool(tileCount: Int, iconCount: Int) -> [String] {
+        let groups = tileCount / 3
+        let iconsToUse = max(1, min(iconCount, groups))
+        let names = (1...iconsToUse).map { "icon-\($0)" }
+        
+        var pool: [String] = []
+        for i in 0..<groups {
+            pool += Array(repeating: names[i % iconsToUse], count: 3)
+        }
+        pool.shuffle()
+        return pool
+    }
+    
+    private typealias TilePos = (row: Int, col: Int, layer: Int)
+    
+    private func rect(
+        rows: ClosedRange<Int>,
+        cols: ClosedRange<Int>,
+        layer: Int,
+        skip: Set<String> = []
+    ) -> [TilePos] {
+        var result: [TilePos] = []
+        for row in rows {
+            for col in cols {
+                if skip.contains("\(row),\(col)") { continue }
+                result.append((row, col, layer))
             }
         }
-        
-        // Layer 1
-        let layer1 = [
-            (0,2), (0,3),
-            (1,1), (1,2), (1,3), (1,4),
-            (2,1), (2,2), (2,3), (2,4),
-            (3,2), (3,3)
-        ]
-        for pos in layer1 {
-            add(icon: nextIcon(),
-                paver: pavers.randomElement()!,
-                row: pos.0, col: pos.1, layer: 1)
+        return result
+    }
+    
+    private func layoutPositions(for level: Int) -> [TilePos] {
+        switch level {
+        case 1:
+            return rect(rows: 1...3, cols: 1...5, layer: 0)
+                + [(2, 2, 1), (2, 3, 1), (2, 4, 1)]
+        case 2:
+            return rect(rows: 0...3, cols: 1...4, layer: 0)
+                + [(1, 1, 1), (1, 2, 1), (1, 3, 1), (2, 2, 1), (2, 3, 1)]
+        case 3, 4:
+            return rect(rows: 0...3, cols: 1...5, layer: 0)
+                + [(1, 1, 1), (1, 2, 1), (1, 3, 1), (1, 4, 1),
+                   (2, 1, 1), (2, 2, 1), (2, 3, 1)]
+        case 5:
+            return rect(rows: 0...3, cols: 0...5, layer: 0, skip: ["0,0", "0,5", "3,0", "3,5"])
+                + rect(rows: 1...2, cols: 1...4, layer: 1)
+                + [(1, 2, 2), (1, 3, 2)]
+        case 6, 7, 8:
+            return rect(rows: 0...3, cols: 0...5, layer: 0, skip: ["0,0", "0,5", "3,0", "3,5"])
+                + [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1),
+                   (1, 0, 1), (1, 2, 1), (1, 3, 1), (1, 5, 1),
+                   (2, 0, 1), (2, 2, 1), (2, 3, 1), (2, 5, 1)]
+                + [(1, 2, 2), (1, 3, 2), (2, 2, 2), (2, 3, 2)]
+        case 9, 10:
+            return rect(rows: 0...3, cols: 0...5, layer: 0)
+                + [(0, 2, 1), (0, 3, 1),
+                   (1, 1, 1), (1, 2, 1), (1, 3, 1), (1, 4, 1),
+                   (2, 1, 1), (2, 2, 1), (2, 3, 1), (2, 4, 1),
+                   (3, 2, 1), (3, 3, 1)]
+                + [(1, 1, 2), (1, 2, 2), (1, 3, 2), (2, 2, 2), (2, 3, 2), (2, 4, 2)]
+        case 11, 12, 13:
+            return rect(rows: 0...3, cols: 0...5, layer: 0)
+                + rect(rows: 0...3, cols: 1...4, layer: 1)
+                + [(0, 2, 2), (0, 3, 2), (1, 1, 2), (1, 2, 2),
+                   (1, 3, 2), (2, 2, 2), (2, 3, 2), (3, 2, 2)]
+        case 14, 15:
+            return rect(rows: 0...3, cols: 0...5, layer: 0)
+                + rect(rows: 0...3, cols: 1...4, layer: 1)
+                + rect(rows: 1...2, cols: 1...4, layer: 2)
+        default:
+            if level <= 20 {
+                return rect(rows: 0...3, cols: 0...5, layer: 0)
+                    + rect(rows: 0...3, cols: 1...4, layer: 1)
+                    + [(0, 2, 2), (0, 3, 2), (1, 1, 2), (1, 2, 2), (1, 3, 2),
+                       (1, 4, 2), (2, 1, 2), (2, 2, 2), (2, 3, 2), (3, 2, 2)]
+                    + [(1, 2, 3), (1, 3, 3), (2, 2, 3), (2, 3, 3)]
+            }
+            return rect(rows: 0...3, cols: 0...5, layer: 0)
+                + rect(rows: 0...3, cols: 1...5, layer: 1, skip: ["0,5", "3,5"])
+                + rect(rows: 0...2, cols: 1...4, layer: 2)
+                + [(1, 1, 3), (1, 2, 3), (1, 3, 3), (2, 1, 3), (2, 2, 3), (2, 3, 3)]
         }
-        
-        // Layer 2
-        let layer2 = [(1,2), (1,3), (2,2), (2,3)]
-        for pos in layer2 {
-            add(icon: nextIcon(),
-                paver: pavers.randomElement()!,
-                row: pos.0, col: pos.1, layer: 2)
-        }
-        
-        return tiles
     }
     
     // MARK: - Free tile logic
@@ -136,8 +193,10 @@ class GameState {
                     }
                     return false
                 }
-                statusMessage = "Matched 3!"
+                score += 10
+                statusMessage = "Matched 3!  +10"
                 justMatched = true
+                updateHighScoreIfNeeded()
                 return
             }
         }
@@ -148,18 +207,13 @@ class GameState {
             didWin = true
             isGameOver = true
             statusMessage = "Level Complete!"
+            updateHighScoreIfNeeded()
         } else if tray.count >= maxTraySize {
             lives -= 1
-            if lives <= 0 {
-                isGameOver = true
-                didWin = false
-                statusMessage = "Game Over"
-            } else {
-                // soft fail – clear tray and continue
-                tray.removeAll()
-                statusMessage = "Lost a life! \(lives) left"
-                updateFreeTiles()
-            }
+            isGameOver = true
+            didWin = false
+            statusMessage = lives <= 0 ? "Game Over" : "Tray full – try again"
+            updateHighScoreIfNeeded()
         }
     }
     
@@ -174,8 +228,20 @@ class GameState {
         startNewLevel()
     }
     
+    func advanceToNextLevel() {
+        level += 1
+        startNewLevel()
+    }
+    
+    func loseLifeAndRestart() {
+        startNewLevel()
+    }
+    
     func fullReset() {
         lives = 3
+        score = 0
+        level = 1
+        isNewHighScore = false
         startNewLevel()
     }
 }
