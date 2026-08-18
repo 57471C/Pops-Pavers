@@ -4,13 +4,11 @@ struct TitleView: View {
     let onPlay: () -> Void
     
     @State private var audio = AudioManager.shared
-    
     @State private var titleOffset: CGFloat = -450
     @State private var titleScale: CGFloat = 0.85
-    @State private var lillyOffset: CGFloat = -500
-    @State private var popOffset: CGFloat = 600
+    @State private var popOffset: CGFloat = 450
     @State private var buttonOpacity: Double = 0
-    @State private var highScore = UserDefaults.standard.integer(forKey: "highScore")
+    @State private var highScore: Int = UserDefaults.standard.integer(forKey: "highScore")
     
     var body: some View {
         ZStack {
@@ -20,7 +18,27 @@ struct TitleView: View {
                 .scaledToFill()
                 .ignoresSafeArea()
             
-            // Title + Button column
+            // Nan + Lilly group (static, on the path)
+            
+            ZStack(alignment: .bottomLeading) {
+                // Nan (behind)
+                Image("nan-4")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 310)
+                
+                // Lilly (in front, slightly to the right so her tail overlaps Nan’s leg)
+                Image("lilly-1")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 155)
+                    .offset(x: 60, y: 15)
+            }
+            .padding(.leading, 320)   // ← this slides them L/R
+            .padding(.bottom, 430)   // ← this lifts them up into the red circle zone
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            
+            // Main content
             VStack {
                 Spacer().frame(height: 50)
                 
@@ -34,11 +52,10 @@ struct TitleView: View {
                 Spacer()
                 
                 Text("High Score: \(highScore)")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.title2.bold())
                     .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.55), radius: 4, y: 2)
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .opacity(buttonOpacity)
-                    .padding(.bottom, 14)
                 
                 Button(action: {
                     audio.playPlayButton()
@@ -72,22 +89,7 @@ struct TitleView: View {
                 .padding(.bottom, 40)
             }
             
-            // Lilly (bottom left)
-            VStack {
-                Spacer()
-                HStack {
-                    Image("lilly-1")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 310)
-                        .offset(x: lillyOffset)
-                        .padding(.leading, 10)
-                    Spacer()
-                }
-                .padding(.bottom, 30)
-            }
-            
-            // Pop (bottom right)
+            // Pop – slides in from right
             VStack {
                 Spacer()
                 HStack {
@@ -95,26 +97,19 @@ struct TitleView: View {
                     Image("pop-1")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 680)
-                        .offset(x: popOffset + 12)
-                        .padding(.trailing, 10)
+                        .frame(height: 600)  // 400
+                        .offset(x: popOffset)
+                        .padding(.trailing, 5)
                 }
-                .padding(.bottom, -10)
+                .padding(.bottom, 5)
             }
         }
         .onAppear {
-            highScore = UserDefaults.standard.integer(forKey: "highScore")
             audio.playTitleMusic()
             
             withAnimation(.spring(response: 0.75, dampingFraction: 0.55)) {
                 titleOffset = -20
                 titleScale = 1.0
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.spring(response: 0.75, dampingFraction: 0.7)) {
-                    lillyOffset = 0
-                }
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
@@ -123,7 +118,7 @@ struct TitleView: View {
                 }
             }
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 withAnimation(.easeOut(duration: 0.5)) {
                     buttonOpacity = 1.0
                 }
