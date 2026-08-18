@@ -74,39 +74,26 @@ struct GameView: View {
 
 struct TileView: View {
     let tile: BoardTile
-    let size: CGFloat          // we'll treat this as the short side
-    
-    // Make pavers more rectangular (wider than tall)
-    private var width: CGFloat { size * 1.35 }
-    private var height: CGFloat { size }
-    private var corner: CGFloat { 10 }
+    let size: CGFloat
     
     var body: some View {
         ZStack {
-            // Bottom / side thickness (the dark edge in your sketch)
-            RoundedRectangle(cornerRadius: corner)
-                .fill(Color(white: 0.25))
-                .frame(width: width, height: height)
-                .offset(x: 3, y: 4)
+            // Paver background
+            Image(tile.paverName)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: size, height: size)
             
-            // Main face
-            RoundedRectangle(cornerRadius: corner)
-                .fill(
-                    tile.isFree
-                    ? Color(red: 0.92, green: 0.90, blue: 0.86)   // warm light stone
-                    : Color(white: 0.62)                          // darker when covered
-                )
-                .frame(width: width, height: height)
-                .overlay(
-                    RoundedRectangle(cornerRadius: corner)
-                        .stroke(Color(white: 0.15), lineWidth: 2.2)
-                )
-            
-            // Emoji
-            Text(tile.type.symbol)
-                .font(.system(size: size * 0.48))
+            // Icon on top
+            Image(tile.iconName)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: size * 0.58, height: size * 0.58)
                 .opacity(tile.isFree ? 1.0 : 0.5)
         }
-        .frame(width: width, height: height)
+        .shadow(color: .black.opacity(tile.isFree ? 0.3 : 0.12), radius: 3, y: 2)
+        .opacity(tile.isFree ? 1.0 : 0.75)
     }
 }
