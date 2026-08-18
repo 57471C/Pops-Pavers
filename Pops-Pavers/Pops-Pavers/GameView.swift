@@ -16,33 +16,102 @@ struct GameView: View {
                 .ignoresSafeArea()
             
             // Board
-            BoardLayer(game: game, tileSize: tileSize, cellSpacing: cellSpacing) { tile in
-                selectTile(tile)
-            }
+            BoardLayer(
+                game: game,
+                tileSize: tileSize,
+                cellSpacing: cellSpacing,
+                onTap: { tile in
+                    selectTile(tile)
+                },
+                onBlockedTap: { _ in
+                    audio.playPaverBad()
+                }
+            )
             
-            // Tray
+            
+            // Tray + Shuffle
             VStack {
                 Spacer()
                 
-                ZStack {
-                    Image("tray")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 140)
+                HStack(alignment: .center, spacing: 12) {
+                    // Shuffle button (left of tray)
+                    Button {
+                        guard game.shufflesRemaining > 0 else { return }
+                        audio.playButton()
+                        withAnimation {
+                            game.shuffleTray()
+                        }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(.title2.bold())
+                            Text("\(game.shufflesRemaining)")
+                                .font(.caption.bold())
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Circle()
+                                .fill(game.shufflesRemaining > 0 ? Color.black.opacity(0.45) : Color.gray.opacity(0.4))
+                        )
+                    }
+                    .disabled(game.shufflesRemaining == 0)
                     
-                    HStack(spacing: 9) {               // slightly tighter spacing
-                        ForEach(0..<7, id: \.self) { index in
-                            if index < game.tray.count {
-                                TileView(tile: game.tray[index], size: 66)
-                            } else {
-                                Color.clear
-                                    .frame(width: 66, height: 66)
+                    // Tray
+                    ZStack {
+                        Image("tray")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 140)
+                        
+                        HStack(spacing: 9) {
+                            ForEach(0..<7, id: \.self) { index in
+                                if index < game.tray.count {
+                                    TileView(tile: game.tray[index], size: 66)
+                                } else {
+                                    Color.clear
+                                        .frame(width: 66, height: 66)
+                                }
                             }
                         }
+                        .offset(y: -6)
                     }
-                    .offset(y: -6)                     // vertical alignment tweak
                 }
-                .padding(.bottom, 72)                  // moved up a few px from 80
+                .padding(.bottom, 72)
+            }
+            
+            // Win / Lose Overlay
+            if game.isGameOver {
+                ZStack {
+                    Color.black.opacity(0.55)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 28) {
+                        Image(game.didWin ? "level-complete" : "level-failed")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: 420)
+                        
+                        Button {
+                            audio.playButton()
+                            withAnimation {
+                                game.restart()
+                            }
+                        } label: {
+                            Text(game.didWin ? "Next Level" : "Try Again")
+                                .font(.title2.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 44)
+                                .padding(.vertical, 14)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(red: 0.72, green: 0.38, blue: 0.18))
+                                )
+                        }
+                    }
+                }
+                .zIndex(200)
+                .transition(.opacity)
             }
         }
         .overlay(alignment: .top) {
@@ -74,14 +143,27 @@ struct GameView: View {
             .padding(.bottom, 10)
             .frame(maxWidth: .infinity)
             .background(Color.black.opacity(0.35))
-            .padding(.top, 70)   // ← increased
+            .padding(.top, 70)
         }
     }
     
     private func selectTile(_ tile: BoardTile) {
         audio.playPaverGood()
+        
         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
             game.select(tile)
+        }
+        
+        // Play end-of-level sounds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            if game.isGameOver {
+                if game.didWin {
+                    audio.playLevelWin()
+                    audio.playApplause()
+                } else {
+                    audio.playLevelLose()
+                }
+            }
         }
     }
 }
@@ -92,24 +174,61 @@ struct BoardLayer: View {
     let tileSize: CGFloat
     let cellSpacing: CGFloat
     let onTap: (BoardTile) -> Void
+    let onBlockedTap: (BoardTile) -> Void
     
     var body: some View {
         ZStack {
             ForEach(game.board.sorted(by: { $0.layer < $1.layer })) { tile in
-                let x = CGFloat(tile.col - 2) * cellSpacing + CGFloat(tile.layer) * 5
-                let y = CGFloat(tile.row - 1) * cellSpacing - CGFloat(tile.layer) * 7
-                
-                TileView(tile: tile, size: tileSize)
-                    .offset(x: x, y: y)
-                    .zIndex(Double(tile.layer))
-                    .onTapGesture {
-                        if tile.isFree {
-                            onTap(tile)
-                        }
-                    }
+                TileCell(
+                    tile: tile,
+                    size: tileSize,
+                    cellSpacing: cellSpacing,
+                    onTap: onTap,
+                    onBlockedTap: onBlockedTap
+                )
             }
         }
         .frame(width: 5 * cellSpacing + tileSize, height: 4 * cellSpacing + tileSize)
+    }
+}
+
+struct TileCell: View {
+    let tile: BoardTile
+    let size: CGFloat
+    let cellSpacing: CGFloat
+    let onTap: (BoardTile) -> Void
+    let onBlockedTap: (BoardTile) -> Void
+    
+    @State private var shake: CGFloat = 0
+    
+    var body: some View {
+        let x = CGFloat(tile.col - 2) * cellSpacing + CGFloat(tile.layer) * 5
+        let y = CGFloat(tile.row - 1) * cellSpacing - CGFloat(tile.layer) * 7
+        
+        TileView(tile: tile, size: size)
+            .offset(x: x + shake, y: y)
+            .zIndex(Double(tile.layer))
+            .onTapGesture {
+                if tile.isFree {
+                    onTap(tile)
+                } else {
+                    // Quiver animation
+                    withAnimation(.default) {
+                        shake = 10
+                    }
+                    withAnimation(.default.delay(0.08)) {
+                        shake = -8
+                    }
+                    withAnimation(.default.delay(0.16)) {
+                        shake = 5
+                    }
+                    withAnimation(.default.delay(0.24)) {
+                        shake = 0
+                    }
+                    
+                    onBlockedTap(tile)
+                }
+            }
     }
 }
 

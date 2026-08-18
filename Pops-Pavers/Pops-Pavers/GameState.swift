@@ -8,10 +8,9 @@ class GameState {
     var statusMessage = "Clear the covered tiles"
     var isGameOver = false
     var didWin = false
+    var shufflesRemaining = 2
     
     let maxTraySize = 7
-    let columns = 4
-    let rows = 3
     
     init() {
         startNewLevel()
@@ -24,9 +23,10 @@ class GameState {
         statusMessage = "Only free (bright) tiles can be selected"
         isGameOver = false
         didWin = false
+        shufflesRemaining = 2
     }
     
-    // MARK: - Level generation (simple layered + some randomness)
+    // MARK: - Level generation
     private func generateLevel() -> [BoardTile] {
         var tiles: [BoardTile] = []
         
@@ -34,19 +34,25 @@ class GameState {
             tiles.append(BoardTile(iconName: icon, paverName: paver, row: row, col: col, layer: layer))
         }
         
-        // Create pools
-        // Only use 5 icons for now (much better for early levels)
-        let icons = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5"].shuffled() //let icons = (1...20).map { "icon-\($0)" }.shuffled()
-        let pavers = (1...6).map { "paver-\($0)" }
+        // Balanced pool – every icon in multiples of 3
+        var typePool: [String] = []
+        let availableIcons = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5"]
+        
+        for icon in availableIcons {
+            let count = 3 * Int.random(in: 1...3) // 3, 6 or 9
+            typePool += Array(repeating: icon, count: count)
+        }
+        typePool.shuffle()
         
         var iconIndex = 0
         func nextIcon() -> String {
-            let icon = icons[iconIndex % icons.count]
+            let icon = typePool[iconIndex % typePool.count]
             iconIndex += 1
             return icon
         }
         
-        // ===== Solid layout with good density =====
+        let pavers = (1...6).map { "paver-\($0)" }
+        
         // Layer 0
         for row in 0...3 {
             for col in 0...5 {
@@ -81,8 +87,6 @@ class GameState {
         return tiles
     }
     
-    
-    
     // MARK: - Free tile logic
     private func updateFreeTiles() {
         for i in board.indices {
@@ -91,7 +95,6 @@ class GameState {
             let isCovered = board.contains { other in
                 guard other.id != tile.id && other.layer > tile.layer else { return false }
                 
-                // Higher tile blocks a small area (allows one tile to cover multiple below)
                 let rowDiff = abs(other.row - tile.row)
                 let colDiff = abs(other.col - tile.col)
                 
@@ -102,7 +105,6 @@ class GameState {
         }
     }
     
-    
     func select(_ tile: BoardTile) {
         guard !isGameOver,
               tile.isFree,
@@ -112,13 +114,12 @@ class GameState {
         let moved = board.remove(at: index)
         tray.append(moved)
         
-        updateFreeTiles()          // important – some tiles may now become free
+        updateFreeTiles()
         checkForMatch()
         checkWinLose()
     }
     
     private func checkForMatch() {
-        // Group by iconName instead of the old type
         let counts = Dictionary(grouping: tray, by: { $0.iconName })
         
         for (iconName, group) in counts {
@@ -138,14 +139,25 @@ class GameState {
     }
     
     private func checkWinLose() {
-        if board.isEmpty && tray.isEmpty {
+        if board.isEmpty {
+            // Board cleared = win (even if a few tiles remain in tray we still count it as success for now)
             didWin = true
             isGameOver = true
-            statusMessage = "Level cleared! 🎉"
+            statusMessage = "Level Complete!"
         } else if tray.count >= maxTraySize {
             isGameOver = true
+            didWin = false
             statusMessage = "Tray full – try again"
         }
+    }
+    
+    // MARK: - Shuffle
+    func shuffleTray() {
+        guard shufflesRemaining > 0, !tray.isEmpty else { return }
+        
+        tray.shuffle()
+        shufflesRemaining -= 1
+        statusMessage = "Tray shuffled! (\(shufflesRemaining) left)"
     }
     
     func restart() {
