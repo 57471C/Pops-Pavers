@@ -4,8 +4,8 @@ struct GameView: View {
     @State private var game = GameState()
     @State private var audio = AudioManager.shared
     
-    private let tileSize: CGFloat = 118
-    private let cellSpacing: CGFloat = 86
+    private let tileSize: CGFloat = 108
+    private let cellSpacing: CGFloat = 78
     
     var body: some View {
         ZStack {
@@ -15,39 +15,12 @@ struct GameView: View {
                 .scaledToFill()
                 .ignoresSafeArea()
             
-            // Top bar + Board only
-            VStack {
-                HStack {
-                    Text(game.statusMessage)
-                        .font(.title3.bold())
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
-                    
-                    Spacer()
-                    
-                    Button {
-                        audio.isMusicMuted.toggle()
-                        audio.playButton()
-                    } label: {
-                        Image(audio.isMusicMuted ? "unmute" : "mute")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 40, height: 40)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                
-                Spacer()
-                
-                BoardLayer(game: game, tileSize: 108, cellSpacing: 78) { tile in
-                    selectTile(tile)
-                }
-                
-                Spacer()
+            // Board
+            BoardLayer(game: game, tileSize: tileSize, cellSpacing: cellSpacing) { tile in
+                selectTile(tile)
             }
             
-            // ===== TRAY OVERLAY – pinned to bottom =====
+            // Tray
             VStack {
                 Spacer()
                 
@@ -55,57 +28,54 @@ struct GameView: View {
                     Image("tray")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 135)
+                        .frame(height: 140)
                     
-                    HStack(spacing: 10) {
+                    HStack(spacing: 9) {               // slightly tighter spacing
                         ForEach(0..<7, id: \.self) { index in
                             if index < game.tray.count {
-                                TileView(tile: game.tray[index], size: 70)
+                                TileView(tile: game.tray[index], size: 66)
                             } else {
-                                Color.clear.frame(width: 70, height: 70)
+                                Color.clear
+                                    .frame(width: 66, height: 66)
                             }
                         }
                     }
-                    .offset(y: -8)
+                    .offset(y: -6)                     // vertical alignment tweak
                 }
-                .padding(.bottom, 25)
-            }
-            .ignoresSafeArea(edges: .bottom) // important
-        }
-    }
-    
-    // MARK: - Tray
-    private var trayView: some View {
-        VStack(spacing: 10) {
-            Text("Tray  \(game.tray.count)/7")
-                .font(.title2.bold())
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.5), radius: 1)
-            
-            HStack(spacing: 12) {
-                ForEach(0..<7, id: \.self) { index in
-                    if index < game.tray.count {
-                        TileView(tile: game.tray[index], size: 82)
-                    } else {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.white.opacity(0.10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 2.5, dash: [7]))
-                            )
-                            .frame(width: 82, height: 82)
-                    }
-                }
+                .padding(.bottom, 72)                  // moved up a few px from 80
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.4), radius: 10, y: 5)
-        )
-        .padding(.horizontal, 14)
+        .overlay(alignment: .top) {
+            HStack {
+                Text(game.statusMessage.isEmpty ? "Match 3 tiles!" : game.statusMessage)
+                    .font(.title3.bold())
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Button {
+                    audio.isMusicMuted.toggle()
+                    audio.playButton()
+                } label: {
+                    Image(audio.isMusicMuted ? "unmute" : "mute")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 46, height: 46)
+                        .padding(6)
+                        .background(
+                            Circle()
+                                .fill(Color.black.opacity(0.4))
+                        )
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.black.opacity(0.35))
+            .padding(.top, 70)   // ← increased
+        }
     }
     
     private func selectTile(_ tile: BoardTile) {
@@ -133,7 +103,9 @@ struct BoardLayer: View {
                     .offset(x: x, y: y)
                     .zIndex(Double(tile.layer))
                     .onTapGesture {
-                        if tile.isFree { onTap(tile) }
+                        if tile.isFree {
+                            onTap(tile)
+                        }
                     }
             }
         }
