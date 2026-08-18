@@ -5,7 +5,8 @@ struct TitleView: View {
     
     @State private var titleOffset: CGFloat = -450
     @State private var titleScale: CGFloat = 0.85
-    @State private var popOffset: CGFloat = -600
+    @State private var lillyOffset: CGFloat = -500
+    @State private var popOffset: CGFloat = 600
     @State private var buttonOpacity: Double = 0
     
     var body: some View {
@@ -17,7 +18,7 @@ struct TitleView: View {
                 .ignoresSafeArea()
             
             VStack {
-                Spacer().frame(height: 80)
+                Spacer().frame(height: 50)
                 
                 // Title
                 Image("title-text")
@@ -29,7 +30,7 @@ struct TitleView: View {
                 
                 Spacer()
                 
-                // PLAY button (higher)
+                // PLAY button
                 Button(action: onPlay) {
                     Text("PLAY")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -55,51 +56,73 @@ struct TitleView: View {
                         )
                 }
                 .opacity(buttonOpacity)
-                .padding(.bottom, 60)
+                .padding(.bottom, 40)
             }
             
-            // Pop character – slides in from left, stays in foreground
+            // Lilly-1 (pink zone - bottom left)
             VStack {
                 Spacer()
                 HStack {
-                    Image("pop")
+                    Image("lilly-1")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 280)
-                        .offset(x: popOffset)
+                        .frame(height: 310)
+                        .offset(x: lillyOffset)
                         .padding(.leading, 10)
                     Spacer()
                 }
-                .padding(.bottom, 160)
+                .padding(.bottom, 30)
+            }
+            
+            // Pop (red zone - bottom right) - 2x larger
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Image("pop-1")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 680)
+                        .offset(x: popOffset + 12)      // a few px to the right
+                        .padding(.trailing, 10)
+                }
+                .padding(.bottom, -10)                 // drop him ~10px lower
             }
         }
         .onAppear {
-            // Title drop + bounce
+            // Title drop
             withAnimation(.spring(response: 0.75, dampingFraction: 0.55)) {
-                titleOffset = -20          // slightly higher than centre
+                titleOffset = -20
                 titleScale = 1.0
             }
             
-            // Pop slides in from left
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
+            // Lilly slides in from left
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation(.spring(response: 0.75, dampingFraction: 0.7)) {
+                    lillyOffset = 0
+                }
+            }
+            
+            // Pop slides in from right
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.spring(response: 0.75, dampingFraction: 0.68)) {
                     popOffset = 0
                 }
             }
             
-            // Button fades in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            // Button
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
                 withAnimation(.easeOut(duration: 0.5)) {
                     buttonOpacity = 1.0
                 }
             }
             
-            // Occasional gentle bounce on title
-            Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
+            // Occasional title bounce
+            Timer.scheduledTimer(withTimeInterval: 4.2, repeats: true) { _ in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
                     titleScale = 1.05
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
                         titleScale = 1.0
                     }
