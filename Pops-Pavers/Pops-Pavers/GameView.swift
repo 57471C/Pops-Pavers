@@ -126,8 +126,28 @@ struct GameView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .bottom) {
+                    HStack(alignment: .bottom) {
+                        Image(overlayNanName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 440)
+                            .padding(.leading, -8)
+                        
+                        Spacer()
+                        
+                        Image(overlayPopName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 440)
+                            .padding(.trailing, -8)
+                    }
+                    .padding(.bottom, 88)
+                    .allowsHitTesting(false)
+                }
                 .zIndex(200)
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .overlay(alignment: .top) {
@@ -186,6 +206,18 @@ struct GameView: View {
         if game.didWin { return "level-complete" }
         if game.lives <= 0 { return "game-over" }
         return "level-failed"
+    }
+    
+    private var overlayPopName: String {
+        if game.didWin { return "pop-4" }
+        if game.lives <= 0 { return "pop-5" }
+        return "pop-2"
+    }
+    
+    private var overlayNanName: String {
+        if game.didWin { return "nan-1" }
+        if game.lives <= 0 { return "nan-3" }
+        return "nan-2"
     }
     
     private var overlayButtonTitle: String {
