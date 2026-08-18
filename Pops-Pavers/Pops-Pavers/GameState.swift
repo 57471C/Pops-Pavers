@@ -9,6 +9,8 @@ class GameState {
     var isGameOver = false
     var didWin = false
     var shufflesRemaining = 2
+    var justMatched = false
+    var lives = 3
     
     let maxTraySize = 7
     
@@ -24,6 +26,8 @@ class GameState {
         isGameOver = false
         didWin = false
         shufflesRemaining = 2
+        justMatched = false
+        // don’t reset lives here – only reset on full restart / returning to title
     }
     
     // MARK: - Level generation
@@ -133,6 +137,7 @@ class GameState {
                     return false
                 }
                 statusMessage = "Matched 3!"
+                justMatched = true
                 return
             }
         }
@@ -140,27 +145,37 @@ class GameState {
     
     private func checkWinLose() {
         if board.isEmpty {
-            // Board cleared = win (even if a few tiles remain in tray we still count it as success for now)
             didWin = true
             isGameOver = true
             statusMessage = "Level Complete!"
         } else if tray.count >= maxTraySize {
-            isGameOver = true
-            didWin = false
-            statusMessage = "Tray full – try again"
+            lives -= 1
+            if lives <= 0 {
+                isGameOver = true
+                didWin = false
+                statusMessage = "Game Over"
+            } else {
+                // soft fail – clear tray and continue
+                tray.removeAll()
+                statusMessage = "Lost a life! \(lives) left"
+                updateFreeTiles()
+            }
         }
     }
     
-    // MARK: - Shuffle
     func shuffleTray() {
         guard shufflesRemaining > 0, !tray.isEmpty else { return }
-        
         tray.shuffle()
         shufflesRemaining -= 1
         statusMessage = "Tray shuffled! (\(shufflesRemaining) left)"
     }
     
     func restart() {
+        startNewLevel()
+    }
+    
+    func fullReset() {
+        lives = 3
         startNewLevel()
     }
 }

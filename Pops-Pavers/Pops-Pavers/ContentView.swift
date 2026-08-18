@@ -5,7 +5,11 @@ struct ContentView: View {
     
     var body: some View {
         if showGame {
-            GameView()
+            GameView {
+                withAnimation {
+                    showGame = false
+                }
+            }
         } else {
             TitleView {
                 withAnimation {

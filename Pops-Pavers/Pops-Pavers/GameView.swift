@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct GameView: View {
+    var onExitToTitle: () -> Void = {}
+    
     @State private var game = GameState()
     @State private var audio = AudioManager.shared
     
@@ -29,12 +31,23 @@ struct GameView: View {
             )
             
             
-            // Tray + Shuffle
+            // Tray + Lives + Shuffle
             VStack {
                 Spacer()
                 
+                // Lives
+                HStack(spacing: 6) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Text(index < game.lives ? "❤️" : "🖤")
+                            .font(.title2)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 4)
+                
                 HStack(alignment: .center, spacing: 12) {
-                    // Shuffle button (left of tray)
+                    // Shuffle button
                     Button {
                         guard game.shufflesRemaining > 0 else { return }
                         audio.playButton()
@@ -69,8 +82,7 @@ struct GameView: View {
                                 if index < game.tray.count {
                                     TileView(tile: game.tray[index], size: 66)
                                 } else {
-                                    Color.clear
-                                        .frame(width: 66, height: 66)
+                                    Color.clear.frame(width: 66, height: 66)
                                 }
                             }
                         }
@@ -87,18 +99,26 @@ struct GameView: View {
                         .ignoresSafeArea()
                     
                     VStack(spacing: 28) {
-                        Image(game.didWin ? "level-complete" : "level-failed")
+                        Image(game.didWin ? "level-complete" : "game-over")
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: 420)
                         
                         Button {
                             audio.playButton()
-                            withAnimation {
-                                game.restart()
+                            if game.lives <= 0 {
+                                audio.stopMusic()
+                                game.fullReset()
+                                withAnimation {
+                                    onExitToTitle()
+                                }
+                            } else {
+                                withAnimation {
+                                    game.restart()
+                                }
                             }
                         } label: {
-                            Text(game.didWin ? "Next Level" : "Try Again")
+                            Text(game.didWin ? "Next Level" : "Title")
                                 .font(.title2.bold())
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 44)
@@ -154,8 +174,12 @@ struct GameView: View {
             game.select(tile)
         }
         
-        // Play end-of-level sounds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if game.justMatched {
+                audio.playMatch()
+                game.justMatched = false
+            }
+            
             if game.isGameOver {
                 if game.didWin {
                     audio.playLevelWin()
