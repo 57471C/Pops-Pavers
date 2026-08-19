@@ -3,203 +3,226 @@ import SwiftUI
 struct GameView: View {
     var onExitToTitle: () -> Void = {}
     
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    
     @State private var game = GameState()
     @State private var audio = AudioManager.shared
     
-    private let tileSize: CGFloat = 108
-    private let cellSpacing: CGFloat = 78
-    
     var body: some View {
-        ZStack {
-            // Background
-            Image("game-background")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-            
-            // Board
-            BoardLayer(
-                game: game,
-                tileSize: tileSize,
-                cellSpacing: cellSpacing,
-                onTap: { tile in
-                    selectTile(tile)
-                },
-                onBlockedTap: { _ in
-                    audio.playPaverBad()
-                }
+        GeometryReader { geo in
+            let layout = GameLayout(
+                size: geo.size,
+                isCompact: horizontalSizeClass == .compact
+                    || min(geo.size.width, geo.size.height) < 700
             )
             
-            
-            // Tray + Lives + Shuffle
-            VStack {
-                Spacer()
+            ZStack {
+                Image("game-background")
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
                 
-                // Lives
-                HStack(spacing: 6) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Text(index < game.lives ? "❤️" : "🖤")
-                            .font(.title2)
-                    }
-                    Spacer()
+                VStack(spacing: 0) {
+                    hudBar(layout: layout)
+                    
+                    Spacer(minLength: 8)
+                    
+                    BoardLayer(
+                        game: game,
+                        tileSize: layout.tileSize,
+                        cellSpacing: layout.cellSpacing,
+                        layerShift: layout.layerShift,
+                        onTap: { tile in
+                            selectTile(tile)
+                        },
+                        onBlockedTap: { _ in
+                            audio.playPaverBad()
+                        }
+                    )
+                    
+                    Spacer(minLength: 8)
+                    
+                    traySection(layout: layout)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 4)
+                .frame(width: geo.size.width, height: geo.size.height)
                 
-                HStack(alignment: .center, spacing: 12) {
-                    // Shuffle button
-                    Button {
-                        guard game.shufflesRemaining > 0 else { return }
-                        audio.playButton()
-                        withAnimation {
-                            game.shuffleTray()
-                        }
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.2.squarepath")
-                                .font(.title2.bold())
-                            Text("\(game.shufflesRemaining)")
-                                .font(.caption.bold())
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 52, height: 52)
-                        .background(
-                            Circle()
-                                .fill(game.shufflesRemaining > 0 ? Color.black.opacity(0.45) : Color.gray.opacity(0.4))
-                        )
-                    }
-                    .disabled(game.shufflesRemaining == 0)
-                    
-                    // Tray
-                    ZStack {
-                        Image("tray")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 140)
-                        
-                        HStack(spacing: 9) {
-                            ForEach(0..<7, id: \.self) { index in
-                                if index < game.tray.count {
-                                    TileView(tile: game.tray[index], size: 66)
-                                } else {
-                                    Color.clear.frame(width: 66, height: 66)
-                                }
-                            }
-                        }
-                        .offset(y: -6)
-                    }
+                if game.isGameOver {
+                    overlay(layout: layout)
                 }
-                .padding(.bottom, 72)
             }
-            
-            // Win / Lose Overlay
-            if game.isGameOver {
-                ZStack {
-                    Color.black.opacity(0.55)
-                        .ignoresSafeArea()
-                    
-                    VStack(spacing: 28) {
-                        Image(overlayImageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: 420)
-                        
-                        if game.isNewHighScore && (game.didWin || game.lives <= 0) {
-                            Text("New High Score!")
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundColor(Color(red: 1.0, green: 0.85, blue: 0.25))
-                                .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
-                        }
-                        
-                        Button {
-                            handleOverlayButton()
-                        } label: {
-                            Text(overlayButtonTitle)
-                                .font(.title2.bold())
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 44)
-                                .padding(.vertical, 14)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(red: 0.72, green: 0.38, blue: 0.18))
-                                )
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .bottom) {
-                    HStack(alignment: .bottom) {
-                        Image(overlayNanName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 440)
-                            .padding(.leading, -8)
-                        
-                        Spacer()
-                        
-                        Image(overlayPopName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 440)
-                            .padding(.trailing, -8)
-                    }
-                    .padding(.bottom, 88)
-                    .allowsHitTesting(false)
-                }
-                .zIndex(200)
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            }
-        }
-        .overlay(alignment: .top) {
-            VStack(spacing: 6) {
-                ZStack {
-                    HStack {
-                        Text("LEVEL \(game.level)")
-                            .font(.headline.bold())
-                            .foregroundColor(.white)
-                        
-                        Spacer()
-                        
-                        Button {
-                            audio.isMusicMuted.toggle()
-                            audio.playButton()
-                        } label: {
-                            Image(audio.isMusicMuted ? "unmute" : "mute")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 46, height: 46)
-                                .padding(6)
-                                .background(
-                                    Circle()
-                                        .fill(Color.black.opacity(0.4))
-                                )
-                        }
-                    }
-                    
-                    Text("\(game.score)")
-                        .font(.title2.bold())
-                        .foregroundColor(.white)
-                        .monospacedDigit()
-                }
-                
-                Text(game.statusMessage.isEmpty ? "Match 3 tiles!" : game.statusMessage)
-                    .font(.subheadline.bold())
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
-            .padding(.bottom, 10)
-            .frame(maxWidth: .infinity)
-            .background(Color.black.opacity(0.35))
-            .padding(.top, 70)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .onChange(of: game.lives) { _, lives in
             if lives <= 0 && game.isGameOver && !game.didWin {
                 audio.playGameOver()
             }
         }
+    }
+    
+    // MARK: - HUD
+    
+    private func hudBar(layout: GameLayout) -> some View {
+        VStack(spacing: layout.isCompact ? 4 : 6) {
+            ZStack {
+                HStack {
+                    Text("LEVEL \(game.level)")
+                        .font(layout.levelFont)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Button {
+                        audio.isMusicMuted.toggle()
+                        audio.playButton()
+                    } label: {
+                        Image(audio.isMusicMuted ? "unmute" : "mute")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: layout.muteSize, height: layout.muteSize)
+                            .padding(layout.isCompact ? 4 : 6)
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.4))
+                            )
+                    }
+                }
+                
+                Text("\(game.score)")
+                    .font(layout.scoreFont)
+                    .foregroundColor(.white)
+                    .monospacedDigit()
+            }
+            
+            Text(game.statusMessage.isEmpty ? "Match 3 tiles!" : game.statusMessage)
+                .font(layout.statusFont)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, layout.isCompact ? 14 : 18)
+        .padding(.top, 10)
+        .padding(.bottom, layout.isCompact ? 8 : 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.35))
+    }
+    
+    // MARK: - Tray
+    
+    private func traySection(layout: GameLayout) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Text(index < game.lives ? "❤️" : "🖤")
+                        .font(layout.heartFont)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, layout.isCompact ? 16 : 24)
+            .padding(.bottom, 4)
+            
+            HStack(alignment: .center, spacing: layout.isCompact ? 8 : 12) {
+                Button {
+                    guard game.shufflesRemaining > 0 else { return }
+                    audio.playButton()
+                    withAnimation {
+                        game.shuffleTray()
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: "arrow.2.squarepath")
+                            .font(layout.isCompact ? .title3.bold() : .title2.bold())
+                        Text("\(game.shufflesRemaining)")
+                            .font(.caption.bold())
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: layout.shuffleSize, height: layout.shuffleSize)
+                    .background(
+                        Circle()
+                            .fill(game.shufflesRemaining > 0 ? Color.black.opacity(0.45) : Color.gray.opacity(0.4))
+                    )
+                }
+                .disabled(game.shufflesRemaining == 0)
+                
+                ZStack {
+                    Image("tray")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: layout.trayHeight)
+                    
+                    HStack(spacing: layout.trayTileSpacing) {
+                        ForEach(0..<7, id: \.self) { index in
+                            if index < game.tray.count {
+                                TileView(tile: game.tray[index], size: layout.trayTileSize)
+                            } else {
+                                Color.clear.frame(width: layout.trayTileSize, height: layout.trayTileSize)
+                            }
+                        }
+                    }
+                    .offset(y: layout.trayTileOffsetY)
+                }
+            }
+            .padding(.bottom, layout.trayBottom)
+        }
+    }
+    
+    // MARK: - Overlay
+    
+    private func overlay(layout: GameLayout) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+            
+            VStack(spacing: layout.isCompact ? 18 : 28) {
+                Image(overlayImageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: layout.overlayTitleMax)
+                
+                if game.isNewHighScore && (game.didWin || game.lives <= 0) {
+                    Text("New High Score!")
+                        .font(.system(size: layout.overlayHighScoreFont, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(red: 1.0, green: 0.85, blue: 0.25))
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                }
+                
+                Button {
+                    handleOverlayButton()
+                } label: {
+                    Text(overlayButtonTitle)
+                        .font(layout.isCompact ? .headline.bold() : .title2.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, layout.isCompact ? 32 : 44)
+                        .padding(.vertical, layout.isCompact ? 12 : 14)
+                        .background(
+                            Capsule()
+                                .fill(Color(red: 0.72, green: 0.38, blue: 0.18))
+                        )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            HStack(alignment: .bottom) {
+                Image(overlayNanName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: layout.overlayCharacterHeight)
+                    .padding(.leading, layout.isCompact ? 0 : -8)
+                
+                Spacer()
+                
+                Image(overlayPopName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: layout.overlayCharacterHeight)
+                    .padding(.trailing, layout.isCompact ? 0 : -8)
+            }
+            .padding(.bottom, layout.overlayCharacterBottom)
+            .allowsHitTesting(false)
+        }
+        .zIndex(200)
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
     
     private var overlayImageName: String {
@@ -270,11 +293,51 @@ struct GameView: View {
     }
 }
 
+// MARK: - Layout
+
+private struct GameLayout {
+    let size: CGSize
+    let isCompact: Bool
+    
+    var tileSize: CGFloat {
+        if !isCompact { return 108 }
+        let fromWidth = (size.width - 20) / 4.7
+        let reserved: CGFloat = 250
+        let fromHeight = max(52, size.height - reserved) / 4.1
+        return min(76, max(56, min(fromWidth, fromHeight)))
+    }
+    
+    var cellSpacing: CGFloat { isCompact ? tileSize * 0.72 : 78 }
+    var layerShift: CGSize {
+        CGSize(width: tileSize * 5 / 108, height: tileSize * 7 / 108)
+    }
+    
+    var trayHeight: CGFloat { isCompact ? 90 : 140 }
+    var trayTileSize: CGFloat { isCompact ? 44 : 66 }
+    var trayTileSpacing: CGFloat { isCompact ? 5 : 9 }
+    var trayTileOffsetY: CGFloat { isCompact ? -4 : -6 }
+    var shuffleSize: CGFloat { isCompact ? 48 : 52 }
+    var heartFont: Font { isCompact ? .title3 : .title2 }
+    var trayBottom: CGFloat { isCompact ? 10 : 40 }
+    
+    var levelFont: Font { isCompact ? .subheadline.bold() : .headline.bold() }
+    var scoreFont: Font { isCompact ? .title3.bold() : .title2.bold() }
+    var statusFont: Font { isCompact ? .caption.bold() : .subheadline.bold() }
+    var muteSize: CGFloat { isCompact ? 38 : 46 }
+    
+    var overlayTitleMax: CGFloat { isCompact ? min(300, size.width - 36) : 420 }
+    var overlayCharacterHeight: CGFloat { isCompact ? 210 : 440 }
+    var overlayCharacterBottom: CGFloat { isCompact ? 8 : 88 }
+    var overlayHighScoreFont: CGFloat { isCompact ? 22 : 32 }
+}
+
 // MARK: - Board
+
 struct BoardLayer: View {
     let game: GameState
     let tileSize: CGFloat
     let cellSpacing: CGFloat
+    let layerShift: CGSize
     let onTap: (BoardTile) -> Void
     let onBlockedTap: (BoardTile) -> Void
     
@@ -285,6 +348,7 @@ struct BoardLayer: View {
                     tile: tile,
                     size: tileSize,
                     cellSpacing: cellSpacing,
+                    layerShift: layerShift,
                     onTap: onTap,
                     onBlockedTap: onBlockedTap
                 )
@@ -298,14 +362,16 @@ struct TileCell: View {
     let tile: BoardTile
     let size: CGFloat
     let cellSpacing: CGFloat
+    let layerShift: CGSize
     let onTap: (BoardTile) -> Void
     let onBlockedTap: (BoardTile) -> Void
     
     @State private var shake: CGFloat = 0
     
     var body: some View {
-        let x = CGFloat(tile.col - 2) * cellSpacing + CGFloat(tile.layer) * 5
-        let y = CGFloat(tile.row - 1) * cellSpacing - CGFloat(tile.layer) * 7
+        let x = CGFloat(tile.col - 2) * cellSpacing + CGFloat(tile.layer) * layerShift.width
+        let y = CGFloat(tile.row - 1) * cellSpacing - CGFloat(tile.layer) * layerShift.height
+        let shakeAmount = max(6, size * 0.09)
         
         TileView(tile: tile, size: size)
             .offset(x: x + shake, y: y)
@@ -314,15 +380,14 @@ struct TileCell: View {
                 if tile.isFree {
                     onTap(tile)
                 } else {
-                    // Quiver animation
                     withAnimation(.default) {
-                        shake = 10
+                        shake = shakeAmount
                     }
                     withAnimation(.default.delay(0.08)) {
-                        shake = -8
+                        shake = -shakeAmount * 0.8
                     }
                     withAnimation(.default.delay(0.16)) {
-                        shake = 5
+                        shake = shakeAmount * 0.5
                     }
                     withAnimation(.default.delay(0.24)) {
                         shake = 0
@@ -335,6 +400,7 @@ struct TileCell: View {
 }
 
 // MARK: - Tile
+
 struct TileView: View {
     let tile: BoardTile
     let size: CGFloat
