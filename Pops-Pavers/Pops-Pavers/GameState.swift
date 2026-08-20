@@ -27,6 +27,10 @@ class GameState {
     private static let totalLevelsKey = "totalLevelsCompleted"
     static let pendingBankHighlightKey = "pendingBankLifeHighlight"
     
+    var shufflesForCurrentLife: Int {
+        max(1, (max(1, level) - 1) / 10)
+    }
+    
     var canUndo: Bool {
         guard undosRemaining > 0, !isGameOver, let id = lastUndoableTileID else { return false }
         return tray.contains(where: { $0.id == id })
@@ -88,10 +92,11 @@ class GameState {
         statusMessage = "Level \(level) – match 3 tiles"
         isGameOver = false
         didWin = false
+        shufflesRemaining = shufflesForCurrentLife
         justMatched = false
         justEarnedBankLife = false
         lastUndoableTileID = nil
-        // don’t reset lives, score, shuffles, life bank, or undos here – only reset those on full restart / title
+        // don’t reset lives, score, life bank, or undos here – only reset those on full restart / title
     }
     
     // MARK: - Level generation
@@ -381,10 +386,12 @@ class GameState {
     func shuffleBoard() {
         guard shufflesRemaining > 0, !isGameOver, board.count >= 2 else { return }
         
+        // Keep the same stacked slots so the same number of tiles stay covered.
+        var slots = board.map { TilePos(row: $0.row, col: $0.col, layer: $0.layer) }
+        slots.shuffle()
+        
         var tiles = board
         tiles.shuffle()
-        
-        let slots = shuffledSlots(count: tiles.count)
         for i in tiles.indices {
             tiles[i].row = slots[i].row
             tiles[i].col = slots[i].col
@@ -397,18 +404,6 @@ class GameState {
         statusMessage = "Board shuffled! (\(shufflesRemaining) left)"
     }
     
-    private func shuffledSlots(count: Int) -> [TilePos] {
-        var slots = layoutPositions(for: level)
-        
-        if slots.count < count {
-            slots = board.map { ($0.row, $0.col, $0.layer) }
-        }
-        
-        slots.shuffle()
-        slots.sort { $0.layer < $1.layer }
-        return Array(slots.prefix(count))
-    }
-    
     private func recordLevelCompleted() {
         totalLevelsCompleted += 1
         UserDefaults.standard.set(totalLevelsCompleted, forKey: Self.totalLevelsKey)
@@ -418,15 +413,6 @@ class GameState {
             justEarnedBankLife = true
             UserDefaults.standard.set(true, forKey: Self.pendingBankHighlightKey)
             statusMessage = "Level Complete!  Life Bank +1"
-        }
-        
-        if level > 0 && level % 10 == 0 {
-            shufflesRemaining += 1
-            if statusMessage.contains("Life Bank") {
-                statusMessage += "  Reshuffle +1"
-            } else {
-                statusMessage = "Level Complete!  Reshuffle +1"
-            }
         }
     }
     
