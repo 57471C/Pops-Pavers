@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TitleView: View {
     let onPlay: () -> Void
+    var onSecretCottage: () -> Void = {}
     
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
@@ -11,6 +12,8 @@ struct TitleView: View {
     @State private var popOffset: CGFloat = 450
     @State private var buttonOpacity: Double = 0
     @State private var highScore: Int = UserDefaults.standard.integer(forKey: "highScore")
+    @State private var lifeBank: Int = UserDefaults.standard.integer(forKey: "lifeBank")
+    @State private var bankPulse = false
     
     var body: some View {
         GeometryReader { geo in
@@ -27,23 +30,32 @@ struct TitleView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                 
-                // Nan + Lilly – bottom left / path
-                ZStack(alignment: .bottomLeading) {
-                    Image("nan-4")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: layout.nanHeight)
-                    
+                // Nan – bottom left / path
+                Image("nan-4")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: layout.nanHeight)
+                    .padding(.leading, layout.nanLeading)
+                    .padding(.bottom, layout.nanBottom)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+                    .allowsHitTesting(false)
+                
+                // Lilly – secret bonus entry
+                Button {
+                    audio.playButton()
+                    audio.stopMusic()
+                    onSecretCottage()
+                } label: {
                     Image("lilly-1")
                         .resizable()
                         .scaledToFit()
                         .frame(height: layout.lillyHeight)
-                        .offset(x: layout.lillyOffset.width, y: layout.lillyOffset.height)
                 }
-                .padding(.leading, layout.nanLeading)
-                .padding(.bottom, layout.nanBottom)
+                .buttonStyle(.plain)
+                .padding(.leading, layout.nanLeading + layout.lillyOffset.width)
+                .padding(.bottom, max(0, layout.nanBottom - layout.lillyOffset.height))
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
-                .allowsHitTesting(false)
+                .zIndex(20)
                 
                 // Pop – slides in from the right
                 Image("pop-1")
@@ -75,9 +87,19 @@ struct TitleView: View {
                         .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                         .opacity(buttonOpacity)
                     
+                    Text("❤️  Banked Lives: \(lifeBank)")
+                        .font(.system(size: layout.highScoreFont, weight: .bold, design: .rounded))
+                        .foregroundColor(bankPulse
+                                         ? Color(red: 1.0, green: 0.85, blue: 0.25)
+                                         : .white)
+                        .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                        .scaleEffect(bankPulse ? 1.12 : 1.0)
+                        .opacity(buttonOpacity)
+                        .padding(.bottom, 6)
+                    
                     Button(action: {
                         audio.playPlayButton()
-                        audio.playGameplayMusic()
+                        audio.startRunPlaylist()
                         onPlay()
                     }) {
                         Text("PLAY")
@@ -114,6 +136,8 @@ struct TitleView: View {
         }
         .ignoresSafeArea()
         .onAppear {
+            highScore = UserDefaults.standard.integer(forKey: "highScore")
+            lifeBank = UserDefaults.standard.integer(forKey: "lifeBank")
             audio.playTitleMusic()
             
             withAnimation(.spring(response: 0.75, dampingFraction: 0.55)) {
@@ -131,6 +155,12 @@ struct TitleView: View {
                 withAnimation(.easeOut(duration: 0.5)) {
                     buttonOpacity = 1.0
                 }
+                
+                let shouldHighlight = UserDefaults.standard.bool(forKey: GameState.pendingBankHighlightKey)
+                if shouldHighlight {
+                    UserDefaults.standard.set(false, forKey: GameState.pendingBankHighlightKey)
+                    pulseBankedLives()
+                }
             }
             
             Timer.scheduledTimer(withTimeInterval: 4.2, repeats: true) { _ in
@@ -141,6 +171,22 @@ struct TitleView: View {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
                         titleScale = 1.0
                     }
+                }
+            }
+        }
+    }
+    
+    private func pulseBankedLives() {
+        for i in 0..<3 {
+            let start = 0.15 + Double(i) * 0.7
+            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) {
+                    bankPulse = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + start + 0.35) {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) {
+                    bankPulse = false
                 }
             }
         }

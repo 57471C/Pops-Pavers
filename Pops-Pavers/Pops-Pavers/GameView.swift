@@ -17,10 +17,11 @@ struct GameView: View {
             )
             
             ZStack {
-                Image("game-background")
+                Image(game.backgroundName)
                     .resizable()
                     .scaledToFill()
                     .ignoresSafeArea()
+                    .id(game.backgroundName)
                 
                 VStack(spacing: 0) {
                     hudBar(layout: layout)
@@ -56,6 +57,9 @@ struct GameView: View {
             if lives <= 0 && game.isGameOver && !game.didWin {
                 audio.playGameOver()
             }
+        }
+        .onChange(of: game.level) { _, level in
+            audio.playPlaylistTrack(forLevel: level)
         }
     }
     
@@ -116,33 +120,32 @@ struct GameView: View {
                     Text(index < game.lives ? "❤️" : "🖤")
                         .font(layout.heartFont)
                 }
+                
                 Spacer()
+                
+                Text("Bank \(game.lifeBank)")
+                    .font(layout.isCompact ? .caption.bold() : .subheadline.bold())
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.black.opacity(0.4)))
             }
             .padding(.horizontal, layout.isCompact ? 16 : 24)
             .padding(.bottom, 4)
             
-            HStack(alignment: .center, spacing: layout.isCompact ? 8 : 12) {
-                Button {
-                    guard game.shufflesRemaining > 0 else { return }
+            HStack(alignment: .center, spacing: layout.trayButtonSpacing) {
+                circleActionButton(
+                    icon: "arrow.2.squarepath",
+                    count: game.shufflesRemaining,
+                    enabled: game.shufflesRemaining > 0 && !game.board.isEmpty,
+                    size: layout.shuffleSize,
+                    compact: layout.isCompact
+                ) {
                     audio.playButton()
                     withAnimation {
-                        game.shuffleTray()
+                        game.shuffleBoard()
                     }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(layout.isCompact ? .title3.bold() : .title2.bold())
-                        Text("\(game.shufflesRemaining)")
-                            .font(.caption.bold())
-                    }
-                    .foregroundColor(.white)
-                    .frame(width: layout.shuffleSize, height: layout.shuffleSize)
-                    .background(
-                        Circle()
-                            .fill(game.shufflesRemaining > 0 ? Color.black.opacity(0.45) : Color.gray.opacity(0.4))
-                    )
                 }
-                .disabled(game.shufflesRemaining == 0)
                 
                 ZStack {
                     Image("tray")
@@ -161,9 +164,49 @@ struct GameView: View {
                     }
                     .offset(y: layout.trayTileOffsetY)
                 }
+                .frame(maxWidth: .infinity)
+                
+                circleActionButton(
+                    icon: "arrow.uturn.backward",
+                    count: game.undosRemaining,
+                    enabled: game.canUndo,
+                    size: layout.shuffleSize,
+                    compact: layout.isCompact
+                ) {
+                    audio.playButton()
+                    withAnimation {
+                        game.undoLastMove()
+                    }
+                }
             }
+            .padding(.horizontal, layout.isCompact ? 8 : 16)
             .padding(.bottom, layout.trayBottom)
         }
+    }
+    
+    private func circleActionButton(
+        icon: String,
+        count: Int,
+        enabled: Bool,
+        size: CGFloat,
+        compact: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(compact ? .title3.bold() : .title2.bold())
+                Text("\(count)")
+                    .font(.caption.bold())
+            }
+            .foregroundColor(.white)
+            .frame(width: size, height: size)
+            .background(
+                Circle()
+                    .fill(enabled ? Color.black.opacity(0.45) : Color.gray.opacity(0.4))
+            )
+        }
+        .disabled(!enabled)
     }
     
     // MARK: - Overlay
@@ -186,18 +229,35 @@ struct GameView: View {
                         .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
                 }
                 
-                Button {
-                    handleOverlayButton()
-                } label: {
-                    Text(overlayButtonTitle)
-                        .font(layout.isCompact ? .headline.bold() : .title2.bold())
+                if game.didWin && game.justEarnedBankLife {
+                    Text("Life Bank +1!")
+                        .font(.system(size: layout.isCompact ? 22 : 28, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, layout.isCompact ? 32 : 44)
-                        .padding(.vertical, layout.isCompact ? 12 : 14)
-                        .background(
-                            Capsule()
-                                .fill(Color(red: 0.72, green: 0.38, blue: 0.18))
-                        )
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                }
+                
+                if game.lives <= 0 && !game.didWin {
+                    Text("Life Bank: \(game.lifeBank)")
+                        .font(.system(size: layout.isCompact ? 20 : 24, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                    
+                    if game.lifeBank > 0 {
+                        overlayCapsuleButton("Use Banked Life", compact: layout.isCompact) {
+                            audio.playButton()
+                            withAnimation {
+                                _ = game.useBankedLife()
+                            }
+                        }
+                    }
+                    
+                    overlayCapsuleButton("Back to Title", compact: layout.isCompact) {
+                        handleOverlayButton()
+                    }
+                } else {
+                    overlayCapsuleButton(overlayButtonTitle, compact: layout.isCompact) {
+                        handleOverlayButton()
+                    }
                 }
             }
         }
@@ -241,6 +301,20 @@ struct GameView: View {
         if game.didWin { return "nan-1" }
         if game.lives <= 0 { return "nan-3" }
         return "nan-2"
+    }
+    
+    private func overlayCapsuleButton(_ title: String, compact: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(compact ? .headline.bold() : .title2.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, compact ? 32 : 44)
+                .padding(.vertical, compact ? 12 : 14)
+                .background(
+                    Capsule()
+                        .fill(Color(red: 0.72, green: 0.38, blue: 0.18))
+                )
+        }
     }
     
     private var overlayButtonTitle: String {
@@ -312,11 +386,18 @@ private struct GameLayout {
         CGSize(width: tileSize * 5 / 108, height: tileSize * 7 / 108)
     }
     
-    var trayHeight: CGFloat { isCompact ? 90 : 140 }
-    var trayTileSize: CGFloat { isCompact ? 44 : 66 }
-    var trayTileSpacing: CGFloat { isCompact ? 5 : 9 }
+    var trayHeight: CGFloat { isCompact ? 84 : 140 }
+    var trayTileSpacing: CGFloat { isCompact ? 3 : 9 }
     var trayTileOffsetY: CGFloat { isCompact ? -4 : -6 }
-    var shuffleSize: CGFloat { isCompact ? 48 : 52 }
+    var shuffleSize: CGFloat { isCompact ? 42 : 52 }
+    var trayButtonSpacing: CGFloat { isCompact ? 6 : 12 }
+    var trayTileSize: CGFloat {
+        if !isCompact { return 66 }
+        let sideButtons = shuffleSize * 2
+        let gaps = trayButtonSpacing * 2 + 16
+        let available = size.width - sideButtons - gaps
+        return min(40, max(30, (available - trayTileSpacing * 6) / 7))
+    }
     var heartFont: Font { isCompact ? .title3 : .title2 }
     var trayBottom: CGFloat { isCompact ? 10 : 40 }
     

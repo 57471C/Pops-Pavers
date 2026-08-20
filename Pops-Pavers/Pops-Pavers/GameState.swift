@@ -8,24 +8,70 @@ class GameState {
     var statusMessage = "Clear the covered tiles"
     var isGameOver = false
     var didWin = false
-    var shufflesRemaining = 2
+    var shufflesRemaining = 1
+    var undosRemaining = 2
+    var lastUndoableTileID: UUID?
     var justMatched = false
     var lives = 3
     var score = 0
     var level = 1
     var highScore = 0
     var isNewHighScore = false
+    var lifeBank = 0
+    var totalLevelsCompleted = 0
+    var justEarnedBankLife = false
     
     let maxTraySize = 7
     private static let highScoreKey = "highScore"
+    private static let lifeBankKey = "lifeBank"
+    private static let totalLevelsKey = "totalLevelsCompleted"
+    static let pendingBankHighlightKey = "pendingBankLifeHighlight"
+    
+    var canUndo: Bool {
+        guard undosRemaining > 0, !isGameOver, let id = lastUndoableTileID else { return false }
+        return tray.contains(where: { $0.id == id })
+    }
     
     var availableIconCount: Int {
         min(20, 5 + (level - 1) / 5)
     }
     
+    var backgroundName: String {
+        backgroundName(for: level)
+    }
+    
+    func backgroundName(for level: Int) -> String {
+        let names = [
+            "game-background",
+            "game-background-1",
+            "game-background-2",
+            "game-background-3",
+            "game-background-4"
+        ]
+        let index = (max(1, level) - 1) / 10
+        return names[index % names.count]
+    }
+    
     init() {
         highScore = UserDefaults.standard.integer(forKey: Self.highScoreKey)
+        lifeBank = UserDefaults.standard.integer(forKey: Self.lifeBankKey)
+        totalLevelsCompleted = UserDefaults.standard.integer(forKey: Self.totalLevelsKey)
         startNewLevel()
+    }
+    
+    func addToLifeBank(_ amount: Int) {
+        guard amount != 0 else { return }
+        lifeBank = max(0, lifeBank + amount)
+        UserDefaults.standard.set(lifeBank, forKey: Self.lifeBankKey)
+    }
+    
+    func useBankedLife() -> Bool {
+        guard lifeBank > 0, lives <= 0, isGameOver, !didWin else { return false }
+        addToLifeBank(-1)
+        lives = 1
+        startNewLevel()
+        statusMessage = "Banked life used! \(lifeBank) left in bank"
+        return true
     }
     
     func updateHighScoreIfNeeded() {
@@ -42,9 +88,10 @@ class GameState {
         statusMessage = "Level \(level) – match 3 tiles"
         isGameOver = false
         didWin = false
-        shufflesRemaining = 2
         justMatched = false
-        // don’t reset lives or score here – only reset on full restart / returning to title
+        justEarnedBankLife = false
+        lastUndoableTileID = nil
+        // don’t reset lives, score, shuffles, life bank, or undos here – only reset those on full restart / title
     }
     
     // MARK: - Level generation
@@ -95,7 +142,24 @@ class GameState {
         return result
     }
     
+    private enum BoardShape {
+        case h, plus, ring, diamond, frame
+    }
+    
     private func layoutPositions(for level: Int) -> [TilePos] {
+        if level <= 10 {
+            return earlyRectangularLayout(level)
+        }
+        let extraLayers: Int
+        switch level {
+        case 11...15: extraLayers = 1
+        case 16...25: extraLayers = 2
+        default: extraLayers = 3
+        }
+        return stackedShape(pickShape(for: level), extraLayers: extraLayers)
+    }
+    
+    private func earlyRectangularLayout(_ level: Int) -> [TilePos] {
         switch level {
         case 1:
             return rect(rows: 1...3, cols: 1...5, layer: 0)
@@ -117,35 +181,115 @@ class GameState {
                    (1, 0, 1), (1, 2, 1), (1, 3, 1), (1, 5, 1),
                    (2, 0, 1), (2, 2, 1), (2, 3, 1), (2, 5, 1)]
                 + [(1, 2, 2), (1, 3, 2), (2, 2, 2), (2, 3, 2)]
-        case 9, 10:
+        default:
             return rect(rows: 0...3, cols: 0...5, layer: 0)
                 + [(0, 2, 1), (0, 3, 1),
                    (1, 1, 1), (1, 2, 1), (1, 3, 1), (1, 4, 1),
                    (2, 1, 1), (2, 2, 1), (2, 3, 1), (2, 4, 1),
                    (3, 2, 1), (3, 3, 1)]
                 + [(1, 1, 2), (1, 2, 2), (1, 3, 2), (2, 2, 2), (2, 3, 2), (2, 4, 2)]
-        case 11, 12, 13:
-            return rect(rows: 0...3, cols: 0...5, layer: 0)
-                + rect(rows: 0...3, cols: 1...4, layer: 1)
-                + [(0, 2, 2), (0, 3, 2), (1, 1, 2), (1, 2, 2),
-                   (1, 3, 2), (2, 2, 2), (2, 3, 2), (3, 2, 2)]
-        case 14, 15:
-            return rect(rows: 0...3, cols: 0...5, layer: 0)
-                + rect(rows: 0...3, cols: 1...4, layer: 1)
-                + rect(rows: 1...2, cols: 1...4, layer: 2)
-        default:
-            if level <= 20 {
-                return rect(rows: 0...3, cols: 0...5, layer: 0)
-                    + rect(rows: 0...3, cols: 1...4, layer: 1)
-                    + [(0, 2, 2), (0, 3, 2), (1, 1, 2), (1, 2, 2), (1, 3, 2),
-                       (1, 4, 2), (2, 1, 2), (2, 2, 2), (2, 3, 2), (3, 2, 2)]
-                    + [(1, 2, 3), (1, 3, 3), (2, 2, 3), (2, 3, 3)]
-            }
-            return rect(rows: 0...3, cols: 0...5, layer: 0)
-                + rect(rows: 0...3, cols: 1...5, layer: 1, skip: ["0,5", "3,5"])
-                + rect(rows: 0...2, cols: 1...4, layer: 2)
-                + [(1, 1, 3), (1, 2, 3), (1, 3, 3), (2, 1, 3), (2, 2, 3), (2, 3, 3)]
         }
+    }
+    
+    private func pickShape(for level: Int) -> BoardShape {
+        let pool: [BoardShape]
+        switch level {
+        case 11...15:
+            pool = [.h, .plus, .diamond]
+        case 16...20:
+            pool = [.h, .plus, .diamond, .ring]
+        case 21...30:
+            pool = [.h, .ring, .diamond, .frame, .plus]
+        default:
+            pool = Bool.random()
+                ? [.frame, .h, .ring]
+                : [.frame, .h, .ring, .diamond, .plus]
+        }
+        return pool.randomElement() ?? .plus
+    }
+    
+    private func shapeCells(_ shape: BoardShape) -> [(Int, Int)] {
+        switch shape {
+        case .h:
+            return [
+                (0, 1), (0, 4),
+                (1, 1), (1, 2), (1, 3), (1, 4),
+                (2, 1), (2, 2), (2, 3), (2, 4),
+                (3, 1), (3, 4)
+            ]
+        case .plus:
+            return [
+                (0, 2), (0, 3),
+                (1, 1), (1, 2), (1, 3), (1, 4),
+                (2, 1), (2, 2), (2, 3), (2, 4),
+                (3, 2), (3, 3)
+            ]
+        case .ring:
+            return [
+                (0, 1), (0, 2), (0, 3), (0, 4),
+                (1, 0), (1, 5),
+                (2, 0), (2, 5),
+                (3, 1), (3, 2), (3, 3), (3, 4)
+            ]
+        case .diamond:
+            return [
+                (0, 3),
+                (1, 2), (1, 3), (1, 4),
+                (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+                (3, 2), (3, 3), (3, 4)
+            ]
+        case .frame:
+            return [
+                (0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5),
+                (1, 0), (1, 5),
+                (2, 0), (2, 5),
+                (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)
+            ]
+        }
+    }
+    
+    private func stackedShape(_ shape: BoardShape, extraLayers: Int) -> [TilePos] {
+        let base = shapeCells(shape)
+        var positions: [TilePos] = base.map { ($0.0, $0.1, 0) }
+        
+        let inward = base.sorted {
+            let da = hypot(Double($0.0) - 1.5, Double($0.1) - 2.5)
+            let db = hypot(Double($1.0) - 1.5, Double($1.1) - 2.5)
+            return da < db
+        }
+        
+        if extraLayers >= 1 {
+            let count = max(3, min(inward.count, (inward.count * 2) / 3))
+            positions += inward.prefix(count).map { ($0.0, $0.1, 1) }
+        }
+        if extraLayers >= 2 {
+            let count = max(3, min(inward.count, inward.count / 2))
+            positions += inward.prefix(count).map { ($0.0, $0.1, 2) }
+        }
+        if extraLayers >= 3 {
+            let count = max(3, min(inward.count, inward.count / 3))
+            positions += inward.prefix(count).map { ($0.0, $0.1, 3) }
+        }
+        
+        return snappedToMultipleOfThree(positions)
+    }
+    
+    private func snappedToMultipleOfThree(_ positions: [TilePos]) -> [TilePos] {
+        var result = positions
+        let extra = result.count % 3
+        guard extra != 0 else { return result }
+        
+        let high = result.map(\.layer).max() ?? 0
+        var removed = 0
+        result.removeAll { pos in
+            guard removed < extra, pos.layer == high else { return false }
+            removed += 1
+            return true
+        }
+        while result.count % 3 != 0 && !result.isEmpty {
+            result.removeLast()
+        }
+        return result
     }
     
     // MARK: - Free tile logic
@@ -174,10 +318,26 @@ class GameState {
         
         let moved = board.remove(at: index)
         tray.append(moved)
+        lastUndoableTileID = moved.id
         
         updateFreeTiles()
         checkForMatch()
+        if let id = lastUndoableTileID, !tray.contains(where: { $0.id == id }) {
+            lastUndoableTileID = nil
+        }
         checkWinLose()
+    }
+    
+    func undoLastMove() {
+        guard canUndo, let id = lastUndoableTileID,
+              let trayIndex = tray.firstIndex(where: { $0.id == id }) else { return }
+        
+        let tile = tray.remove(at: trayIndex)
+        board.append(tile)
+        lastUndoableTileID = nil
+        undosRemaining -= 1
+        updateFreeTiles()
+        statusMessage = "Undo! (\(undosRemaining) left)"
     }
     
     private func checkForMatch() {
@@ -207,6 +367,7 @@ class GameState {
             didWin = true
             isGameOver = true
             statusMessage = "Level Complete!"
+            recordLevelCompleted()
             updateHighScoreIfNeeded()
         } else if tray.count >= maxTraySize {
             lives -= 1
@@ -217,11 +378,56 @@ class GameState {
         }
     }
     
-    func shuffleTray() {
-        guard shufflesRemaining > 0, !tray.isEmpty else { return }
-        tray.shuffle()
+    func shuffleBoard() {
+        guard shufflesRemaining > 0, !isGameOver, board.count >= 2 else { return }
+        
+        var tiles = board
+        tiles.shuffle()
+        
+        let slots = shuffledSlots(count: tiles.count)
+        for i in tiles.indices {
+            tiles[i].row = slots[i].row
+            tiles[i].col = slots[i].col
+            tiles[i].layer = slots[i].layer
+        }
+        
+        board = tiles
+        updateFreeTiles()
         shufflesRemaining -= 1
-        statusMessage = "Tray shuffled! (\(shufflesRemaining) left)"
+        statusMessage = "Board shuffled! (\(shufflesRemaining) left)"
+    }
+    
+    private func shuffledSlots(count: Int) -> [TilePos] {
+        var slots = layoutPositions(for: level)
+        
+        if slots.count < count {
+            slots = board.map { ($0.row, $0.col, $0.layer) }
+        }
+        
+        slots.shuffle()
+        slots.sort { $0.layer < $1.layer }
+        return Array(slots.prefix(count))
+    }
+    
+    private func recordLevelCompleted() {
+        totalLevelsCompleted += 1
+        UserDefaults.standard.set(totalLevelsCompleted, forKey: Self.totalLevelsKey)
+        
+        if totalLevelsCompleted > 0 && totalLevelsCompleted % 10 == 0 {
+            addToLifeBank(1)
+            justEarnedBankLife = true
+            UserDefaults.standard.set(true, forKey: Self.pendingBankHighlightKey)
+            statusMessage = "Level Complete!  Life Bank +1"
+        }
+        
+        if level > 0 && level % 10 == 0 {
+            shufflesRemaining += 1
+            if statusMessage.contains("Life Bank") {
+                statusMessage += "  Reshuffle +1"
+            } else {
+                statusMessage = "Level Complete!  Reshuffle +1"
+            }
+        }
     }
     
     func restart() {
@@ -242,6 +448,9 @@ class GameState {
         score = 0
         level = 1
         isNewHighScore = false
+        undosRemaining = 2
+        shufflesRemaining = 1
+        lastUndoableTileID = nil
         startNewLevel()
     }
 }

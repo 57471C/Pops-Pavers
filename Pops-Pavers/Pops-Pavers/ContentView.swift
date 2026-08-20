@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var showGame = false
+    @State private var showPlumbing = false
     
     var body: some View {
         if showGame {
@@ -10,12 +11,25 @@ struct ContentView: View {
                     showGame = false
                 }
             }
-        } else {
-            TitleView {
+        } else if showPlumbing {
+            PlumbingBonusView {
                 withAnimation {
-                    showGame = true
+                    showPlumbing = false
                 }
             }
+        } else {
+            TitleView(
+                onPlay: {
+                    withAnimation {
+                        showGame = true
+                    }
+                },
+                onSecretCottage: {
+                    withAnimation {
+                        showPlumbing = true
+                    }
+                }
+            )
         }
     }
 }

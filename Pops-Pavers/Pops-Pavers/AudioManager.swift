@@ -8,6 +8,15 @@ class AudioManager {
     private var musicPlayer: AVAudioPlayer?
     private var sfxPlayers: [AVAudioPlayer] = []
     
+    private let gameplayTracks = [
+        "game-background-1",
+        "game-background-2",
+        "game-background-3",
+        "game-background-4"
+    ]
+    private var runPlaylist: [String] = []
+    private var currentGameplayTrack: String?
+    
     var isMusicMuted = false {
         didSet {
             musicPlayer?.volume = isMusicMuted ? 0 : 0.6
@@ -26,15 +35,31 @@ class AudioManager {
         playMusic(named: "title-background", loop: true)
     }
     
-    func playGameplayMusic() {
-        let tracks = ["game-background-1", "game-background-2", "game-background-3", "game-background-4"]
-        let track = tracks.randomElement()!
+    func startRunPlaylist() {
+        runPlaylist = gameplayTracks.shuffled()
+        currentGameplayTrack = nil
+        playPlaylistTrack(forLevel: 1)
+    }
+    
+    func playPlaylistTrack(forLevel level: Int) {
+        if runPlaylist.isEmpty {
+            runPlaylist = gameplayTracks.shuffled()
+        }
+        let index = (max(1, level) - 1) / 10
+        let track = runPlaylist[index % runPlaylist.count]
+        guard track != currentGameplayTrack else { return }
+        currentGameplayTrack = track
         playMusic(named: track, loop: true)
+    }
+    
+    func playGameplayMusic() {
+        startRunPlaylist()
     }
     
     func stopMusic() {
         musicPlayer?.stop()
         musicPlayer = nil
+        currentGameplayTrack = nil
     }
     
     private func playMusic(named name: String, loop: Bool) {
