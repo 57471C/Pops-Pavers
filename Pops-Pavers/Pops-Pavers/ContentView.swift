@@ -12,7 +12,7 @@ struct ContentView: View {
                 }
             }
         } else if showPlumbing {
-            PlumbingBonusView {
+            PlumbingBonusView(difficulty: .easy) {
                 withAnimation {
                     showPlumbing = false
                 }
@@ -25,9 +25,7 @@ struct ContentView: View {
                     }
                 },
                 onSecretCottage: {
-                    withAnimation {
-                        showPlumbing = true
-                    }
+                    showPlumbing = true
                 }
             )
         }

@@ -7,6 +7,7 @@ struct GameView: View {
     
     @State private var game = GameState()
     @State private var audio = AudioManager.shared
+    @State private var bonusDifficulty: FlowDifficulty?
     
     var body: some View {
         GeometryReader { geo in
@@ -17,38 +18,59 @@ struct GameView: View {
             )
             
             ZStack {
-                Image(game.backgroundName)
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-                    .id(game.backgroundName)
-                
-                VStack(spacing: 0) {
-                    hudBar(layout: layout)
-                    
-                    Spacer(minLength: 8)
-                    
-                    BoardLayer(
-                        game: game,
-                        tileSize: layout.tileSize,
-                        cellSpacing: layout.cellSpacing,
-                        layerShift: layout.layerShift,
-                        onTap: { tile in
-                            selectTile(tile)
+                if let diff = bonusDifficulty {
+                    PlumbingBonusView(
+                        difficulty: diff,
+                        rewards: BonusReward.rewards(
+                            afterCompletingMainLevel: game.level
+                        ),
+                        onExit: {
+                            bonusDifficulty = nil
+                            game.fullReset()
+                            onExitToTitle()
                         },
-                        onBlockedTap: { _ in
-                            audio.playPaverBad()
+                        onFinished: {
+                            let completedLevel = game.level
+                            bonusDifficulty = nil
+                            game.advanceToNextLevel()
+                            game.applyBonusRewards(afterCompletingLevel: completedLevel)
                         }
                     )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                } else {
+                    Image(game.backgroundName)
+                        .resizable()
+                        .scaledToFill()
+                        .ignoresSafeArea()
+                        .id(game.backgroundName)
                     
-                    Spacer(minLength: 8)
+                    VStack(spacing: 0) {
+                        hudBar(layout: layout)
+                        
+                        Spacer(minLength: 8)
+                        
+                        BoardLayer(
+                            game: game,
+                            tileSize: layout.tileSize,
+                            cellSpacing: layout.cellSpacing,
+                            layerShift: layout.layerShift,
+                            onTap: { tile in
+                                selectTile(tile)
+                            },
+                            onBlockedTap: { _ in
+                                audio.playPaverBad()
+                            }
+                        )
+                        
+                        Spacer(minLength: 8)
+                        
+                        traySection(layout: layout)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
                     
-                    traySection(layout: layout)
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-                
-                if game.isGameOver {
-                    overlay(layout: layout)
+                    if game.isGameOver {
+                        overlay(layout: layout)
+                    }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -318,7 +340,12 @@ struct GameView: View {
     }
     
     private var overlayButtonTitle: String {
-        if game.didWin { return "Next Level" }
+        if game.didWin {
+            if FlowDifficulty.triggered(afterCompletingMainLevel: game.level) != nil {
+                return "Bonus Level"
+            }
+            return "Next Level"
+        }
         if game.lives <= 0 { return "Back to Title" }
         return "Try Again"
     }
@@ -326,8 +353,12 @@ struct GameView: View {
     private func handleOverlayButton() {
         if game.didWin {
             audio.playButton()
-            withAnimation {
-                game.advanceToNextLevel()
+            if let diff = FlowDifficulty.triggered(afterCompletingMainLevel: game.level) {
+                bonusDifficulty = diff
+            } else {
+                withAnimation {
+                    game.advanceToNextLevel()
+                }
             }
         } else if game.lives <= 0 {
             game.fullReset()

@@ -27,7 +27,7 @@ class GameState {
     private static let totalLevelsKey = "totalLevelsCompleted"
     static let pendingBankHighlightKey = "pendingBankLifeHighlight"
     
-    var shufflesForCurrentLife: Int {
+    var shufflesForCurrentLevel: Int {
         max(1, (max(1, level) - 1) / 10)
     }
     
@@ -92,7 +92,7 @@ class GameState {
         statusMessage = "Level \(level) – match 3 tiles"
         isGameOver = false
         didWin = false
-        shufflesRemaining = shufflesForCurrentLife
+        shufflesRemaining = shufflesForCurrentLevel
         justMatched = false
         justEarnedBankLife = false
         lastUndoableTileID = nil
@@ -157,11 +157,11 @@ class GameState {
         }
         let extraLayers: Int
         switch level {
-        case 11...15: extraLayers = 1
-        case 16...25: extraLayers = 2
+        case 11...20: extraLayers = 2
+        case 21...30: extraLayers = 3
         default: extraLayers = 3
         }
-        return stackedShape(pickShape(for: level), extraLayers: extraLayers)
+        return stackedShape(pickShape(for: level), extraLayers: extraLayers, dense: level > 20)
     }
     
     private func earlyRectangularLayout(_ level: Int) -> [TilePos] {
@@ -217,43 +217,43 @@ class GameState {
         switch shape {
         case .h:
             return [
-                (0, 1), (0, 4),
-                (1, 1), (1, 2), (1, 3), (1, 4),
-                (2, 1), (2, 2), (2, 3), (2, 4),
-                (3, 1), (3, 4)
+                (0, 0), (0, 1), (0, 4), (0, 5),
+                (1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+                (2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+                (3, 0), (3, 1), (3, 4), (3, 5)
             ]
         case .plus:
             return [
-                (0, 2), (0, 3),
-                (1, 1), (1, 2), (1, 3), (1, 4),
-                (2, 1), (2, 2), (2, 3), (2, 4),
-                (3, 2), (3, 3)
+                (0, 1), (0, 2), (0, 3), (0, 4),
+                (1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+                (2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+                (3, 1), (3, 2), (3, 3), (3, 4)
             ]
         case .ring:
             return [
-                (0, 1), (0, 2), (0, 3), (0, 4),
-                (1, 0), (1, 5),
-                (2, 0), (2, 5),
-                (3, 1), (3, 2), (3, 3), (3, 4)
+                (0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5),
+                (1, 0), (1, 1), (1, 4), (1, 5),
+                (2, 0), (2, 1), (2, 4), (2, 5),
+                (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)
             ]
         case .diamond:
             return [
-                (0, 3),
-                (1, 2), (1, 3), (1, 4),
-                (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
-                (3, 2), (3, 3), (3, 4)
+                (0, 1), (0, 2), (0, 3), (0, 4),
+                (1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+                (2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+                (3, 1), (3, 2), (3, 3), (3, 4)
             ]
         case .frame:
             return [
                 (0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5),
-                (1, 0), (1, 5),
-                (2, 0), (2, 5),
+                (1, 0), (1, 1), (1, 4), (1, 5),
+                (2, 0), (2, 1), (2, 4), (2, 5),
                 (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)
             ]
         }
     }
     
-    private func stackedShape(_ shape: BoardShape, extraLayers: Int) -> [TilePos] {
+    private func stackedShape(_ shape: BoardShape, extraLayers: Int, dense: Bool) -> [TilePos] {
         let base = shapeCells(shape)
         var positions: [TilePos] = base.map { ($0.0, $0.1, 0) }
         
@@ -263,16 +263,20 @@ class GameState {
             return da < db
         }
         
+        let layer1Fraction = dense ? 4 : 3
+        let layer2Fraction = dense ? 3 : 2
+        let layer3Fraction = dense ? 2 : 3
+        
         if extraLayers >= 1 {
-            let count = max(3, min(inward.count, (inward.count * 2) / 3))
+            let count = max(6, min(inward.count, (inward.count * layer1Fraction) / 4))
             positions += inward.prefix(count).map { ($0.0, $0.1, 1) }
         }
         if extraLayers >= 2 {
-            let count = max(3, min(inward.count, inward.count / 2))
+            let count = max(6, min(inward.count, (inward.count * layer2Fraction) / 4))
             positions += inward.prefix(count).map { ($0.0, $0.1, 2) }
         }
         if extraLayers >= 3 {
-            let count = max(3, min(inward.count, inward.count / 3))
+            let count = max(6, min(inward.count, inward.count / layer3Fraction))
             positions += inward.prefix(count).map { ($0.0, $0.1, 3) }
         }
         
@@ -423,6 +427,14 @@ class GameState {
     func advanceToNextLevel() {
         level += 1
         startNewLevel()
+    }
+    
+    func applyBonusRewards(afterCompletingLevel level: Int) {
+        // Shuffle and banked life at 10/20/30… are already applied by
+        // startNewLevel() / recordLevelCompleted(). Only Extra Undo is new.
+        if level % 10 == 5 {
+            undosRemaining += 1
+        }
     }
     
     func loseLifeAndRestart() {
