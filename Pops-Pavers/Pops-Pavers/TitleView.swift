@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TitleView: View {
     let onPlay: () -> Void
-    var onSecretCottage: () -> Void = {}
     
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
@@ -40,22 +39,15 @@ struct TitleView: View {
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
                     .allowsHitTesting(false)
                 
-                // Lilly – secret bonus entry
-                Button {
-                    audio.playButton()
-                    audio.stopMusic()
-                    onSecretCottage()
-                } label: {
-                    Image("lilly-1")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: layout.lillyHeight)
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, layout.nanLeading + layout.lillyOffset.width)
-                .padding(.bottom, max(0, layout.nanBottom - layout.lillyOffset.height))
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
-                .zIndex(20)
+                // Lilly – decorative only
+                Image("lilly-1")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: layout.lillyHeight)
+                    .padding(.leading, layout.nanLeading + layout.lillyOffset.width)
+                    .padding(.bottom, max(0, layout.nanBottom - layout.lillyOffset.height))
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+                    .allowsHitTesting(false)
                 
                 // Pop – slides in from the right
                 Image("pop-1")
@@ -210,7 +202,7 @@ private struct TitleLayout {
     }
     
     var titleMaxWidth: CGFloat { isCompact ? min(340, size.width * 0.88) : 480 }
-    var titleTop: CGFloat { isCompact ? 28 : 50 }
+    var titleTop: CGFloat { isCompact ? 88 : 50 }
     var highScoreFont: CGFloat { isCompact ? 26 : 28 }
     var playFont: CGFloat { isCompact ? 30 : 34 }
     var playWidth: CGFloat { isCompact ? 220 : 260 }

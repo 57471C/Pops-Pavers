@@ -290,7 +290,7 @@ struct GameView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(height: layout.overlayCharacterHeight)
-                    .padding(.leading, layout.isCompact ? 0 : -8)
+                    .padding(.leading, overlayNanLeading(isCompact: layout.isCompact))
                 
                 Spacer()
                 
@@ -298,7 +298,7 @@ struct GameView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(height: layout.overlayCharacterHeight)
-                    .padding(.trailing, layout.isCompact ? 0 : -8)
+                    .padding(.trailing, overlayPopTrailing(isCompact: layout.isCompact))
             }
             .padding(.bottom, layout.overlayCharacterBottom)
             .allowsHitTesting(false)
@@ -323,6 +323,20 @@ struct GameView: View {
         if game.didWin { return "nan-1" }
         if game.lives <= 0 { return "nan-3" }
         return "nan-2"
+    }
+    
+    private func overlayNanLeading(isCompact: Bool) -> CGFloat {
+        guard isCompact else { return -8 }
+        if game.didWin { return 16 }
+        // Fail and game-over poses sit further off the left edge.
+        return 40
+    }
+    
+    private func overlayPopTrailing(isCompact: Bool) -> CGFloat {
+        guard isCompact else { return -8 }
+        // Game-over pose is cropped further right than win/fail.
+        if game.lives <= 0 && !game.didWin { return 24 }
+        return 0
     }
     
     private func overlayCapsuleButton(_ title: String, compact: Bool, action: @escaping () -> Void) -> some View {
@@ -439,7 +453,7 @@ private struct GameLayout {
     
     var overlayTitleMax: CGFloat { isCompact ? min(300, size.width - 36) : 420 }
     var overlayCharacterHeight: CGFloat { isCompact ? 210 : 440 }
-    var overlayCharacterBottom: CGFloat { isCompact ? 8 : 88 }
+    var overlayCharacterBottom: CGFloat { isCompact ? -44 : 88 }
     var overlayHighScoreFont: CGFloat { isCompact ? 22 : 32 }
 }
 
@@ -467,6 +481,7 @@ struct BoardLayer: View {
             }
         }
         .frame(width: 5 * cellSpacing + tileSize, height: 4 * cellSpacing + tileSize)
+        .offset(x: -tileSize)
     }
 }
 
