@@ -176,42 +176,35 @@ struct GameView: View {
                 trayGraphic(layout: layout, kind: .overflow)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, layout.isCompact ? 8 : 16)
-                    .padding(.horizontal, layout.shuffleSize + layout.trayButtonSpacing)
+                    .padding(.horizontal, layout.isCompact ? 0 : layout.shuffleSize + layout.trayButtonSpacing)
                     .padding(.bottom, layout.overflowTraySpacing)
             }
             
-            HStack(alignment: .center, spacing: layout.trayButtonSpacing) {
-                circleActionButton(
-                    icon: "arrow.2.squarepath",
-                    count: game.shufflesRemaining,
-                    enabled: game.shufflesRemaining > 0 && !game.board.isEmpty,
-                    size: layout.shuffleSize,
-                    compact: layout.isCompact
-                ) {
-                    audio.playButton()
-                    withAnimation {
-                        game.shuffleBoard()
-                    }
-                }
-                
+            if layout.isCompact {
                 trayGraphic(layout: layout, kind: .main)
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
                 
-                circleActionButton(
-                    icon: "arrow.uturn.backward",
-                    count: game.undosRemaining,
-                    enabled: game.canUndo,
-                    size: layout.shuffleSize,
-                    compact: layout.isCompact
-                ) {
-                    audio.playButton()
-                    withAnimation {
-                        game.undoLastMove()
-                    }
+                HStack {
+                    Spacer(minLength: 0)
+                    shuffleButton(layout: layout)
+                    Spacer(minLength: 0)
+                    undoButton(layout: layout)
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, 28)
+                .padding(.top, 4)
+                .padding(.bottom, layout.trayBottom)
+            } else {
+                HStack(alignment: .center, spacing: layout.trayButtonSpacing) {
+                    shuffleButton(layout: layout)
+                    trayGraphic(layout: layout, kind: .main)
+                        .frame(maxWidth: .infinity)
+                    undoButton(layout: layout)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, layout.trayBottom)
             }
-            .padding(.horizontal, layout.isCompact ? 8 : 16)
-            .padding(.bottom, layout.trayBottom)
         }
     }
     
@@ -259,6 +252,36 @@ struct GameView: View {
                 .padding(.top, trayHeight * layout.trayInnerTop)
                 .padding(.bottom, trayHeight * layout.trayInnerBottom)
             }
+    }
+    
+    private func shuffleButton(layout: GameLayout) -> some View {
+        circleActionButton(
+            icon: "arrow.2.squarepath",
+            count: game.shufflesRemaining,
+            enabled: game.shufflesRemaining > 0 && !game.board.isEmpty,
+            size: layout.shuffleSize,
+            compact: layout.isCompact
+        ) {
+            audio.playButton()
+            withAnimation {
+                game.shuffleBoard()
+            }
+        }
+    }
+    
+    private func undoButton(layout: GameLayout) -> some View {
+        circleActionButton(
+            icon: "arrow.uturn.backward",
+            count: game.undosRemaining,
+            enabled: game.canUndo,
+            size: layout.shuffleSize,
+            compact: layout.isCompact
+        ) {
+            audio.playButton()
+            withAnimation {
+                game.undoLastMove()
+            }
+        }
     }
     
     private func circleActionButton(
@@ -591,7 +614,7 @@ private struct GameLayout {
         return (slot * 0.92).rounded()
     }
     var heartFont: Font { isCompact ? .title3 : .title2 }
-    var trayBottom: CGFloat { isCompact ? 10 : 40 }
+    var trayBottom: CGFloat { isCompact ? 6 : 40 }
     
     var levelFont: Font { isCompact ? .subheadline.bold() : .headline.bold() }
     var scoreFont: Font { isCompact ? .title3.bold() : .title2.bold() }

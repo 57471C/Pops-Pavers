@@ -107,11 +107,12 @@ Keep existing main-game win sounds. Bonus success uses `bonus-success`.
 - `AudioManager.stopAll()` on `UIApplication.willResignActive` in `PopsPaversApp`
 
 ## UI / Screens
-- **TitleView**: animated `title-text`, Pop / Nan / Lilly, High Score, Banked Lives, PLAY. Nan and Lilly are **not** tappable. iPhone `titleTop` is **88** so the wordmark (including the leaf) sits under the Dynamic Island. Full-bleed `GeometryReader` + `ignoresSafeArea()` — do not add safe-area padding on the whole view or the background will show a white border / shift
+- **TitleView**: animated `title-text`, Pop / Nan / Lilly, High Score, Banked Lives, PLAY. Lilly is **not** tappable. Nan warp is behind `TitleView.nanWarpsToLevel21` (currently **false**); set `true` to jump to level 21. iPhone `titleTop` is **88** so the wordmark (including the leaf) sits under the Dynamic Island. Full-bleed `GeometryReader` + `ignoresSafeArea()` — do not add safe-area padding on the whole view or the background will show a white border / shift
 - **GameView**: board, tray, lives, score, level, shuffle, undo, mute, win/lose/game-over overlays. Bonus replaces the main board in the same ZStack
 - **Game HUD (iPhone)**: two-row chrome (Back/Mute, then Easy/Flows on bonus). Keep original full-bleed background. Do not “fix” Dynamic Island by wrapping the whole game in safe-area padding
 - **Board**: iPad shifted left one tile (`-tileSize`). iPhone shifted left half a tile (`-tileSize * 0.5`) so it sits on the path.
-- **Tray (iPad)**: overlay 7 equal slots on the tray graphic using `tray.png` pocket insets so tiles sit in the recesses. iPhone keeps the packed HStack + `trayTileOffsetY` that already lines up.
+- **Tray (iPad)**: overlay 7 equal slots on the tray graphic using `tray.png` pocket insets so tiles sit in the recesses. Shuffle / Undo sit beside the tray.
+- **Tray (iPhone)**: same pocket overlay as iPad. Shuffle / Undo sit **below** the tray (not beside it — they would clip off-screen). Do not change tray width/tile sizing to make room.
 - **Overflow tray** (level 21+): second full `tray.png` (same size as the main tray) sitting above it. Six extra slots; the 7th pocket stays locked so the art lines up. Locked slots are a darkened paver + lock icon. Free slots: 21–25 → 1, 26–30 → 2, 31–35 → 3, 36+ → 4. Tiles fill the main tray first, then overflow; match-3 and undo use both. Hidden before 21. Cleared in `startNewLevel()`.
 - **Win / fail / game-over overlays**: Nan + Pop at the bottom. iPhone characters sit lower (`overlayCharacterBottom` **-44**) so they cover the tray. Per-pose iPhone insets:
   - Nan leading: win **16**, fail/game-over **40** (`overlayNanLeading` takes `isCompact` — `layout` is not in GameView scope)

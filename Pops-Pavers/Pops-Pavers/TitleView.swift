@@ -1,7 +1,11 @@
 import SwiftUI
 
 struct TitleView: View {
+    /// TEST: set `true` to make Nan jump to main level 21 (overflow tray).
+    static let nanWarpsToLevel21 = false
+    
     let onPlay: () -> Void
+    var onWarpToLevel21: () -> Void = {}
     
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
@@ -29,15 +33,7 @@ struct TitleView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                 
-                // Nan – bottom left / path
-                Image("nan-4")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: layout.nanHeight)
-                    .padding(.leading, layout.nanLeading)
-                    .padding(.bottom, layout.nanBottom)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
-                    .allowsHitTesting(false)
+                nanView(layout: layout, canvas: geo.size)
                 
                 // Lilly – decorative only
                 Image("lilly-1")
@@ -166,6 +162,33 @@ struct TitleView: View {
                 }
             }
         }
+    }
+    
+    @ViewBuilder
+    private func nanView(layout: TitleLayout, canvas: CGSize) -> some View {
+        let image = Image("nan-4")
+            .resizable()
+            .scaledToFit()
+            .frame(height: layout.nanHeight)
+        
+        Group {
+            if Self.nanWarpsToLevel21 {
+                Button {
+                    audio.playPlayButton()
+                    audio.startRunPlaylist()
+                    onWarpToLevel21()
+                } label: {
+                    image
+                }
+                .buttonStyle(.plain)
+            } else {
+                image.allowsHitTesting(false)
+            }
+        }
+        .padding(.leading, layout.nanLeading)
+        .padding(.bottom, layout.nanBottom)
+        .frame(width: canvas.width, height: canvas.height, alignment: .bottomLeading)
+        .zIndex(Self.nanWarpsToLevel21 ? 15 : 0)
     }
     
     private func pulseBankedLives() {
