@@ -31,6 +31,7 @@ struct ChestFrameView: View {
 struct BonusChestRevealView: View {
     var isCompact: Bool
     var rewards: [BonusReward]
+    var bonusPoints: Int = 0
     var onContinue: () -> Void
     
     @State private var audio = AudioManager.shared
@@ -58,6 +59,12 @@ struct BonusChestRevealView: View {
                     .scaledToFit()
                     .frame(maxWidth: isCompact ? 240 : 300)
                     .padding(.horizontal, 28)
+                
+                Text("+\(bonusPoints)")
+                    .font(.system(size: isCompact ? 48 : 62, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(red: 1.0, green: 0.85, blue: 0.25))
+                    .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
+                    .padding(.top, -4)
                 
                 ZStack {
                     ChestFrameView(frameIndex: chestFrame, height: chestHeight)

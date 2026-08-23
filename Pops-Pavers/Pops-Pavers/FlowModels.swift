@@ -102,25 +102,50 @@ enum FlowDifficulty: String, CaseIterable, Identifiable {
         }
     }
     
-    private static let lastPickedLevelIDKey = "lastBonusFlowLevelID"
+    private var queueKey: String { "bonusFlowQueue-\(rawValue)" }
+    private var lastMapKey: String { "lastBonusFlowLevelID-\(rawValue)" }
     
-    /// Random map from this tier, avoiding the map played last time when possible.
+    /// Next map in a shuffled bag for this tier. Every layout is used before any
+    /// repeat; the new bag does not start with the map just played.
     func pickRandomLevel() -> FlowLevel {
         let pool = levels
-        guard let first = pool.first else {
+        guard let fallback = pool.first else {
             return FlowLevel(id: 0, size: 5, pairs: [])
         }
-        let lastID = UserDefaults.standard.object(forKey: Self.lastPickedLevelIDKey) as? Int
-        let candidates: [FlowLevel]
-        if let lastID, pool.count > 1 {
-            let filtered = pool.filter { $0.id != lastID }
-            candidates = filtered.isEmpty ? pool : filtered
-        } else {
-            candidates = pool
+        let validIDs = Set(pool.map(\.id))
+        let lastID = UserDefaults.standard.integer(forKey: lastMapKey)
+        var queue = (UserDefaults.standard.array(forKey: queueKey) as? [Int] ?? [])
+            .filter { validIDs.contains($0) }
+        
+        if queue.isEmpty {
+            var ids = pool.map(\.id).shuffled()
+            if ids.count > 1, lastID != 0, ids.first == lastID {
+                ids.append(ids.removeFirst())
+            }
+            queue = ids
         }
-        let chosen = candidates.randomElement() ?? first
-        UserDefaults.standard.set(chosen.id, forKey: Self.lastPickedLevelIDKey)
-        return chosen
+        
+        let nextID = queue.removeFirst()
+        UserDefaults.standard.set(queue, forKey: queueKey)
+        UserDefaults.standard.set(nextID, forKey: lastMapKey)
+        return pool.first(where: { $0.id == nextID }) ?? fallback
+    }
+    
+    /// Time-attack score for a completed plumbing bonus.
+    static func score(elapsed: TimeInterval) -> Int {
+        switch elapsed {
+        case ..<10: return 50
+        case ..<15: return 45
+        case ..<20: return 40
+        case ..<25: return 35
+        case ..<30: return 30
+        case ..<35: return 25
+        case ..<40: return 20
+        case ..<45: return 15
+        case ..<50: return 10
+        case ..<55: return 5
+        default:    return 0
+        }
     }
     
     /// Bonus after completing main levels 5, 10, 15, 20, 25, …
@@ -158,6 +183,13 @@ struct BonusReward: Identifiable, Equatable, Hashable {
         if let icon = unlockedIconName(afterCompletingMainLevel: level) {
             items.append(
                 BonusReward(id: "icon", title: "New Paver Added", imageName: icon)
+            )
+        }
+        let slotsNow = GameState.overflowFreeCount(for: level)
+        let slotsNext = GameState.overflowFreeCount(for: level + 1)
+        if slotsNext > slotsNow {
+            items.append(
+                BonusReward(id: "slot", title: "Paver slot added", imageName: "paver-1")
             )
         }
         if level % 10 == 0 {

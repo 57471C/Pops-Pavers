@@ -7,12 +7,16 @@ struct FlowGridView: View {
     var levelCount: Int = 1
     var onBack: () -> Void = {}
     var onWin: () -> Void = {}
+    var onScored: (Int) -> Void = { _ in }
     var rewards: [BonusReward] = []
     
     @State private var game: FlowGameState
     @State private var audio = AudioManager.shared
     @State private var isDragging = false
     @State private var didHandleWin = false
+    @State private var startDate: Date?
+    @State private var frozenElapsed: TimeInterval = 0
+    @State private var bonusPoints = 0
     
     init(
         level: FlowLevel,
@@ -21,6 +25,7 @@ struct FlowGridView: View {
         levelCount: Int = 1,
         onBack: @escaping () -> Void = {},
         onWin: @escaping () -> Void = {},
+        onScored: @escaping (Int) -> Void = { _ in },
         rewards: [BonusReward] = []
     ) {
         self.level = level
@@ -29,6 +34,7 @@ struct FlowGridView: View {
         self.levelCount = levelCount
         self.onBack = onBack
         self.onWin = onWin
+        self.onScored = onScored
         self.rewards = rewards
         _game = State(initialValue: FlowGameState(level: level))
     }
@@ -71,6 +77,9 @@ struct FlowGridView: View {
         }
         .ignoresSafeArea()
         .onAppear {
+            if startDate == nil {
+                startDate = Date()
+            }
             audio.playBonusBackground()
         }
         .onChange(of: game.connectedFlowCount) { oldCount, newCount in
@@ -87,6 +96,7 @@ struct FlowGridView: View {
             rewards: rewards.isEmpty
                 ? BonusReward.rewards(afterCompletingMainLevel: 5)
                 : rewards,
+            bonusPoints: awardedBonusPoints,
             onContinue: onWin
         )
         .transition(.opacity)
@@ -163,6 +173,8 @@ struct FlowGridView: View {
             HStack(spacing: 12) {
                 backButton
                 Spacer()
+                timerPill
+                Spacer()
                 if !isCompact {
                     statusPills
                 }
@@ -209,6 +221,27 @@ struct FlowGridView: View {
                         .fill(Color.black.opacity(0.4))
                 )
         }
+    }
+    
+    private var timerPill: some View {
+        TimelineView(.periodic(from: .now, by: 0.2)) { context in
+            let seconds: TimeInterval = {
+                if didHandleWin { return frozenElapsed }
+                guard let start = startDate else { return 0 }
+                return max(0, context.date.timeIntervalSince(start))
+            }()
+            Text(Self.formatElapsed(seconds))
+                .font(.headline.bold())
+                .foregroundColor(.white)
+                .monospacedDigit()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.40))
+                )
+        }
+        .accessibilityLabel("Bonus timer")
     }
     
     private var statusPills: some View {
@@ -279,14 +312,29 @@ struct FlowGridView: View {
         .contentShape(Rectangle())
     }
     
+    private var awardedBonusPoints: Int {
+        if didHandleWin { return bonusPoints }
+        guard game.isComplete, let start = startDate else { return 0 }
+        return FlowDifficulty.score(elapsed: Date().timeIntervalSince(start))
+    }
+    
     private func handleWinIfNeeded(_ complete: Bool) {
         guard complete, !didHandleWin else { return }
         didHandleWin = true
+        let start = startDate ?? Date()
+        frozenElapsed = Date().timeIntervalSince(start)
+        bonusPoints = FlowDifficulty.score(elapsed: frozenElapsed)
+        onScored(bonusPoints)
         audio.stopMusic()
         audio.playBonusSuccess()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             audio.playApplause()
         }
+    }
+    
+    private static func formatElapsed(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
     
     private var activePathLength: Int {

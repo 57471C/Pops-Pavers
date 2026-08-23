@@ -5,18 +5,24 @@ struct GameView: View {
     
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
-    @State private var game = GameState()
+    @State private var game: GameState
     @State private var audio = AudioManager.shared
     @State private var bonusDifficulty: FlowDifficulty?
     @State private var trayClearBurst = 0
     @State private var matchBurst: BoardScoreBurst?
+    
+    init(startingLevel: Int = 1, onExitToTitle: @escaping () -> Void = {}) {
+        self.onExitToTitle = onExitToTitle
+        _game = State(initialValue: GameState(startingLevel: startingLevel))
+    }
     
     var body: some View {
         GeometryReader { geo in
             let layout = GameLayout(
                 size: geo.size,
                 isCompact: horizontalSizeClass == .compact
-                    || min(geo.size.width, geo.size.height) < 700
+                    || min(geo.size.width, geo.size.height) < 700,
+                hasOverflowTray: game.showsOverflowTray
             )
             
             ZStack {
@@ -38,8 +44,12 @@ struct GameView: View {
                             bonusDifficulty = nil
                             game.advanceToNextLevel()
                             game.applyBonusRewards(afterCompletingLevel: completedLevel)
+                        },
+                        onScored: { points in
+                            game.addBonusPoints(points)
                         }
                     )
+                    .id("bonus-\(game.level)-\(diff.rawValue)")
                     .frame(width: geo.size.width, height: geo.size.height)
                 } else {
                     Image(game.backgroundName)
@@ -161,6 +171,14 @@ struct GameView: View {
             .padding(.horizontal, layout.isCompact ? 16 : 24)
             .padding(.bottom, 4)
             
+            if game.showsOverflowTray {
+                trayGraphic(layout: layout, kind: .overflow)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, layout.isCompact ? 8 : 16)
+                    .padding(.horizontal, layout.shuffleSize + layout.trayButtonSpacing)
+                    .padding(.bottom, layout.overflowTraySpacing)
+            }
+            
             HStack(alignment: .center, spacing: layout.trayButtonSpacing) {
                 circleActionButton(
                     icon: "arrow.2.squarepath",
@@ -175,7 +193,7 @@ struct GameView: View {
                     }
                 }
                 
-                trayGraphic(layout: layout)
+                trayGraphic(layout: layout, kind: .main)
                     .frame(maxWidth: .infinity)
                 
                 circleActionButton(
@@ -197,53 +215,48 @@ struct GameView: View {
     }
     
     @ViewBuilder
-    private func traySlot(_ index: Int, layout: GameLayout) -> some View {
-        if index < game.tray.count {
-            TileView(tile: game.tray[index], size: layout.trayTileSize)
+    private func traySlot(index: Int, layout: GameLayout, kind: TrayKind) -> some View {
+        let tileSize = layout.trayTileSize
+        let tiles = kind == .main ? game.tray : game.overflowTray
+        let freeCount = kind == .main ? game.maxTraySize : game.overflowFreeCount
+        
+        if index >= freeCount {
+            LockedTraySlot(size: tileSize)
+        } else if index < tiles.count {
+            TileView(tile: tiles[index], size: tileSize)
         } else {
-            Color.clear.frame(width: layout.trayTileSize, height: layout.trayTileSize)
+            Color.clear.frame(width: tileSize, height: tileSize)
         }
     }
     
-    private func trayGraphic(layout: GameLayout) -> some View {
-        let trayWidth = layout.trayDrawnWidth
+    private func trayGraphic(layout: GameLayout, kind: TrayKind) -> some View {
         let trayHeight = layout.trayHeight
+        let trayWidth = layout.trayDrawnWidth
+        let slotCount = game.maxTraySize
+        let showClear = kind == .main && trayClearBurst > 0
+        let tileSize = layout.trayTileSize
+        
         return Image("tray")
             .resizable()
             .scaledToFit()
             .frame(width: trayWidth, height: trayHeight)
             .overlay {
-                if layout.isCompact {
-                    HStack(spacing: layout.trayTileSpacing) {
-                        ForEach(0..<7, id: \.self) { index in
-                            traySlot(index, layout: layout)
-                        }
-                    }
-                    .offset(y: layout.trayTileOffsetY)
-                    .overlay(alignment: .leading) {
-                        if trayClearBurst > 0 {
-                            ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
-                                .id(trayClearBurst)
-                        }
-                    }
-                } else {
-                    HStack(spacing: 0) {
-                        ForEach(0..<7, id: \.self) { index in
-                            ZStack {
-                                traySlot(index, layout: layout)
-                                if index == 0, trayClearBurst > 0 {
-                                    ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
-                                        .id(trayClearBurst)
-                                }
+                HStack(spacing: 0) {
+                    ForEach(0..<slotCount, id: \.self) { index in
+                        ZStack {
+                            traySlot(index: index, layout: layout, kind: kind)
+                            if index == 0, showClear {
+                                ScorePopup(imageName: "score-5", width: tileSize * 1.15)
+                                    .id(trayClearBurst)
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding(.leading, trayWidth * layout.trayInnerLeft)
-                    .padding(.trailing, trayWidth * layout.trayInnerRight)
-                    .padding(.top, trayHeight * layout.trayInnerTop)
-                    .padding(.bottom, trayHeight * layout.trayInnerBottom)
                 }
+                .padding(.leading, trayWidth * layout.trayInnerLeft)
+                .padding(.trailing, trayWidth * layout.trayInnerRight)
+                .padding(.top, trayHeight * layout.trayInnerTop)
+                .padding(.bottom, trayHeight * layout.trayInnerBottom)
             }
     }
     
@@ -510,16 +523,44 @@ private struct ScorePopup: View {
     }
 }
 
+private enum TrayKind {
+    case main
+    case overflow
+}
+
+private struct LockedTraySlot: View {
+    var size: CGFloat
+    
+    var body: some View {
+        ZStack {
+            Image("paver-1")
+                .resizable()
+                .scaledToFit()
+                .saturation(0.15)
+                .brightness(-0.45)
+            Color.black.opacity(0.42)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.12, style: .continuous))
+            Image(systemName: "lock.fill")
+                .font(.system(size: max(10, size * 0.32), weight: .bold))
+                .foregroundColor(.white.opacity(0.88))
+                .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Locked slot")
+    }
+}
+
 // MARK: - Layout
 
 private struct GameLayout {
     let size: CGSize
     let isCompact: Bool
+    var hasOverflowTray: Bool = false
     
     var tileSize: CGFloat {
         if !isCompact { return 108 }
         let fromWidth = (size.width - 20) / 4.7
-        let reserved: CGFloat = 250
+        let reserved: CGFloat = 250 + (hasOverflowTray ? 90 : 0)
         let fromHeight = max(52, size.height - reserved) / 4.1
         return min(76, max(56, min(fromWidth, fromHeight)))
     }
@@ -530,6 +571,7 @@ private struct GameLayout {
     }
     
     var trayHeight: CGFloat { isCompact ? 84 : 140 }
+    var overflowTraySpacing: CGFloat { isCompact ? 4 : 8 }
     var trayDrawnWidth: CGFloat { trayHeight * (1334.0 / 281.0) }
     /// Pocket grid of tray.png (1334×281): 7 recesses, ~3.95% side rims.
     var trayInnerLeft: CGFloat { 0.0395 }
@@ -542,10 +584,10 @@ private struct GameLayout {
     var trayButtonSpacing: CGFloat { isCompact ? 6 : 12 }
     var trayTileSize: CGFloat {
         if !isCompact { return 66 }
-        let sideButtons = shuffleSize * 2
-        let gaps = trayButtonSpacing * 2 + 16
-        let available = size.width - sideButtons - gaps
-        return min(40, max(30, (available - trayTileSpacing * 6) / 7))
+        let innerH = trayHeight * (1 - trayInnerTop - trayInnerBottom)
+        let innerW = trayDrawnWidth * (1 - trayInnerLeft - trayInnerRight)
+        let slot = min(innerH, innerW / 7)
+        return (slot * 0.92).rounded()
     }
     var heartFont: Font { isCompact ? .title3 : .title2 }
     var trayBottom: CGFloat { isCompact ? 10 : 40 }

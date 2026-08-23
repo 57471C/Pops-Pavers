@@ -14,9 +14,9 @@ Last updated: 23 August 2026
 ## Core Game Loop
 - Layered board of paver tiles with icons
 - Only free (uncovered) tiles can be selected
-- Selected tiles go into a 7-slot tray
-- Match 3 of the same icon → they clear (+10 points)
-- Tray full with no match → lose a life
+- Selected tiles go into a 7-slot tray (plus overflow slots from level 21)
+- Match 3 of the same icon → they clear (+10 points), matching across both trays
+- Both trays full with no match → lose a life
 - Board cleared → level complete
 - 3 lives per run
 - Persistent Life Bank (earn 1 per 10 levels completed)
@@ -28,6 +28,7 @@ Last updated: 23 August 2026
 - +10 match popup: float `score-10` up from the **board cell of the 3rd paver** that completed the match. Size = `trayTileSize * 2.15`. Uses the existing match SFX — no extra sound.
 - +5 tray-clear bonus: after the first paver is placed in a level, whenever a match empties the tray (`justClearedTray`) award **+5**, play `tray-cleared.mp3`, and float a smaller `score-5` (`trayTileSize * 1.15`) up from the first tray slot. Delay the +5 popup and SFX **0.24s** after the +10 so it feels extra. Do **not** award this on the level’s final match (board also empty). Do **not** award on undo or on a fresh empty tray at level start.
 - Bonus plumbing does **not** award +10/+5. Clear `matchBurst` / `trayClearBurst` when leaving a finished board so those popups don’t replay on the next main level.
+- Plumbing time bonus (`FlowDifficulty.score(elapsed:)`): under 10s → 50, then −5 per 5 seconds down to under 55s → 5; 55s+ → 0. Timer starts when the grid appears, is shown on the bonus HUD, points are added to the main score on complete (`addBonusPoints`), and “+N” is shown on the chest screen.
 - Level counter increases on each win
 - Every 5 levels: unlock one additional icon (starts at 5 icons, up to 20)
 - Every 10 levels:
@@ -69,8 +70,8 @@ Triggered after completing main levels **5, 10, 15, 20…** (`FlowDifficulty.tri
 | 20+ (every 5) | Hard | 7×7 |
 
 - Shown as an **in-place overlay** in `GameView` (not `fullScreenCover` — that slid up over the board)
-- Flow: `BonusTitleView` → `FlowGridView` → `BonusChestRevealView`
-- Map selection: keep Easy → Medium → Hard by main-game level; pick a **random layout** from that tier when Play is tapped (`FlowDifficulty.pickRandomLevel()`). Skip the last-played map id when the tier has another choice (`lastBonusFlowLevelID` in UserDefaults). HUD shows e.g. `Easy 2/3`. Existing `FlowLevel.easy/medium/hard` data is unchanged. Back-to-title then Play keeps the same map for that visit.
+- Flow: `BonusTitleView` → `FlowGridView` (timer + time score) → `BonusChestRevealView` (shows “+N”)
+- Map selection: keep Easy → Medium → Hard by main-game level. Each tier has a **shuffled bag** (`bonusFlowQueue-{easy|medium|hard}`): every layout in the tier is dealt once before any repeat, and a new shuffle does not start with the map just played. HUD shows e.g. `Easy 2/3`. Back from the grid to the bonus title keeps the same map for that visit; a new bonus session (new main level) always draws the next map in the bag.
 - Lilly tap on the **title screen is disabled** (decorative only). Bonus is reached only via the main-game milestone
 - 7 hose colours: red, blue, green, yellow, orange, cyan, purple
 - Each colour uses 3 assets: straight (`hose-*-h`), inside corner, outside corner, plus matching `tap-*`
@@ -91,6 +92,7 @@ Chest sprite sheet: **6 frames**, each **333×348**. Crop then scale, `interpola
 Displayed rewards after completing main level N:
 
 - Next unlocked paver icon when the next level adds one (`icon-6` after 5, `icon-7` after 10, …)
+- Levels 20 / 25 / 30 / 35: **Paver slot added** (blank `paver-1`) when overflow free slots increase for the next main level
 - Levels 5 / 15 / 25…: Extra Undo (raises `undosForCurrentLevel` for the next main level; chest still **shows** it)
 - Levels 10 / 20 / 30…: Extra Shuffle + Banked Life (already granted by main progression; chest still **shows** them)
 
@@ -105,11 +107,12 @@ Keep existing main-game win sounds. Bonus success uses `bonus-success`.
 - `AudioManager.stopAll()` on `UIApplication.willResignActive` in `PopsPaversApp`
 
 ## UI / Screens
-- **TitleView**: animated `title-text`, Pop / Nan / Lilly, High Score, Banked Lives, PLAY. Lilly is **not** tappable. iPhone `titleTop` is **88** so the wordmark (including the leaf) sits under the Dynamic Island. Full-bleed `GeometryReader` + `ignoresSafeArea()` — do not add safe-area padding on the whole view or the background will show a white border / shift
+- **TitleView**: animated `title-text`, Pop / Nan / Lilly, High Score, Banked Lives, PLAY. Lilly is **not** tappable. **TEST:** tapping Nan warps to main level 21 (overflow tray). Remove before ship. iPhone `titleTop` is **88** so the wordmark (including the leaf) sits under the Dynamic Island. Full-bleed `GeometryReader` + `ignoresSafeArea()` — do not add safe-area padding on the whole view or the background will show a white border / shift
 - **GameView**: board, tray, lives, score, level, shuffle, undo, mute, win/lose/game-over overlays. Bonus replaces the main board in the same ZStack
 - **Game HUD (iPhone)**: two-row chrome (Back/Mute, then Easy/Flows on bonus). Keep original full-bleed background. Do not “fix” Dynamic Island by wrapping the whole game in safe-area padding
 - **Board**: shifted left about one tile (`.offset(x: -tileSize)` on `BoardLayer`) on iPhone and iPad
 - **Tray (iPad)**: overlay 7 equal slots on the tray graphic using `tray.png` pocket insets so tiles sit in the recesses. iPhone keeps the packed HStack + `trayTileOffsetY` that already lines up.
+- **Overflow tray** (level 21+): second full `tray.png` (same size as the main tray) sitting above it. Six extra slots; the 7th pocket stays locked so the art lines up. Locked slots are a darkened paver + lock icon. Free slots: 21–25 → 1, 26–30 → 2, 31–35 → 3, 36+ → 4. Tiles fill the main tray first, then overflow; match-3 and undo use both. Hidden before 21. Cleared in `startNewLevel()`.
 - **Win / fail / game-over overlays**: Nan + Pop at the bottom. iPhone characters sit lower (`overlayCharacterBottom` **-44**) so they cover the tray. Per-pose iPhone insets:
   - Nan leading: win **16**, fail/game-over **40** (`overlayNanLeading` takes `isCompact` — `layout` is not in GameView scope)
   - Pop trailing: game-over **24**, otherwise **0**

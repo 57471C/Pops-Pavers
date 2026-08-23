@@ -5,6 +5,7 @@ import SwiftUI
 class GameState {
     var board: [BoardTile] = []
     var tray: [BoardTile] = []
+    var overflowTray: [BoardTile] = []
     var statusMessage = "Clear the covered tiles"
     var isGameOver = false
     var didWin = false
@@ -24,6 +25,7 @@ class GameState {
     var justEarnedBankLife = false
     
     let maxTraySize = 7
+    let overflowSlotCount = 6
     private static let highScoreKey = "highScore"
     private static let lifeBankKey = "lifeBank"
     private static let totalLevelsKey = "totalLevelsCompleted"
@@ -43,7 +45,27 @@ class GameState {
     var canUndo: Bool {
         guard undosRemaining > 0, !isGameOver, let id = lastUndoableTileID else { return false }
         return tray.contains(where: { $0.id == id })
+            || overflowTray.contains(where: { $0.id == id })
     }
+    
+    /// Extra free overflow slots. 0 before level 21 (second tray hidden).
+    static func overflowFreeCount(for level: Int) -> Int {
+        switch max(1, level) {
+        case ..<21: return 0
+        case 21...25: return 1
+        case 26...30: return 2
+        case 31...35: return 3
+        default: return 4
+        }
+    }
+    
+    var overflowFreeCount: Int { Self.overflowFreeCount(for: level) }
+    
+    var showsOverflowTray: Bool { overflowFreeCount > 0 }
+    
+    var totalTrayCapacity: Int { maxTraySize + overflowFreeCount }
+    
+    var allTrayTiles: [BoardTile] { tray + overflowTray }
     
     var availableIconCount: Int {
         min(20, 5 + (level - 1) / 5)
@@ -65,10 +87,11 @@ class GameState {
         return names[index % names.count]
     }
     
-    init() {
+    init(startingLevel: Int = 1) {
         highScore = UserDefaults.standard.integer(forKey: Self.highScoreKey)
         lifeBank = UserDefaults.standard.integer(forKey: Self.lifeBankKey)
         totalLevelsCompleted = UserDefaults.standard.integer(forKey: Self.totalLevelsKey)
+        level = max(1, startingLevel)
         startNewLevel()
     }
     
@@ -98,6 +121,7 @@ class GameState {
         board = generateLevel(iconCount: availableIconCount)
         updateFreeTiles()
         tray = []
+        overflowTray = []
         statusMessage = "Level \(level) – match 3 tiles"
         isGameOver = false
         didWin = false
@@ -334,27 +358,37 @@ class GameState {
     func select(_ tile: BoardTile) {
         guard !isGameOver,
               tile.isFree,
-              tray.count < maxTraySize,
+              allTrayTiles.count < totalTrayCapacity,
               let index = board.firstIndex(where: { $0.id == tile.id }) else { return }
         
         let moved = board.remove(at: index)
-        tray.append(moved)
+        if tray.count < maxTraySize {
+            tray.append(moved)
+        } else {
+            overflowTray.append(moved)
+        }
         hasPlacedInTrayThisLevel = true
         lastUndoableTileID = moved.id
         
         updateFreeTiles()
         checkForMatch()
-        if let id = lastUndoableTileID, !tray.contains(where: { $0.id == id }) {
+        if let id = lastUndoableTileID, !allTrayTiles.contains(where: { $0.id == id }) {
             lastUndoableTileID = nil
         }
         checkWinLose()
     }
     
     func undoLastMove() {
-        guard canUndo, let id = lastUndoableTileID,
-              let trayIndex = tray.firstIndex(where: { $0.id == id }) else { return }
+        guard canUndo, let id = lastUndoableTileID else { return }
         
-        let tile = tray.remove(at: trayIndex)
+        let tile: BoardTile
+        if let overflowIndex = overflowTray.firstIndex(where: { $0.id == id }) {
+            tile = overflowTray.remove(at: overflowIndex)
+        } else if let trayIndex = tray.firstIndex(where: { $0.id == id }) {
+            tile = tray.remove(at: trayIndex)
+        } else {
+            return
+        }
         board.append(tile)
         lastUndoableTileID = nil
         undosRemaining -= 1
@@ -363,21 +397,16 @@ class GameState {
     }
     
     private func checkForMatch() {
-        let counts = Dictionary(grouping: tray, by: { $0.iconName })
+        let counts = Dictionary(grouping: allTrayTiles, by: { $0.iconName })
         
         for (iconName, group) in counts {
             if group.count >= 3 {
-                var removed = 0
-                tray.removeAll { tile in
-                    if tile.iconName == iconName && removed < 3 {
-                        removed += 1
-                        return true
-                    }
-                    return false
-                }
+                let ids = Set(group.prefix(3).map(\.id))
+                tray.removeAll { ids.contains($0.id) }
+                overflowTray.removeAll { ids.contains($0.id) }
                 score += 10
                 justMatched = true
-                if tray.isEmpty && !board.isEmpty && hasPlacedInTrayThisLevel {
+                if tray.isEmpty && overflowTray.isEmpty && !board.isEmpty && hasPlacedInTrayThisLevel {
                     score += 5
                     justClearedTray = true
                     statusMessage = "Matched 3!  +10   Tray +5"
@@ -397,7 +426,7 @@ class GameState {
             statusMessage = "Level Complete!"
             recordLevelCompleted()
             updateHighScoreIfNeeded()
-        } else if tray.count >= maxTraySize {
+        } else if allTrayTiles.count >= totalTrayCapacity {
             lives -= 1
             isGameOver = true
             didWin = false
@@ -451,6 +480,12 @@ class GameState {
     func applyBonusRewards(afterCompletingLevel _: Int) {
         // Shuffle, banked life, and Extra Undo are already applied by
         // startNewLevel() / recordLevelCompleted() / undosForCurrentLevel.
+    }
+    
+    func addBonusPoints(_ points: Int) {
+        guard points > 0 else { return }
+        score += points
+        updateHighScoreIfNeeded()
     }
     
     func loseLifeAndRestart() {

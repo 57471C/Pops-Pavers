@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TitleView: View {
     let onPlay: () -> Void
+    var onWarpToLevel21: () -> Void = {}
     
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
@@ -29,15 +30,22 @@ struct TitleView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                 
-                // Nan – bottom left / path
-                Image("nan-4")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: layout.nanHeight)
-                    .padding(.leading, layout.nanLeading)
-                    .padding(.bottom, layout.nanBottom)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
-                    .allowsHitTesting(false)
+                // Nan – TEST warp to level 21
+                Button {
+                    audio.playPlayButton()
+                    audio.startRunPlaylist()
+                    onWarpToLevel21()
+                } label: {
+                    Image("nan-4")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: layout.nanHeight)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, layout.nanLeading)
+                .padding(.bottom, layout.nanBottom)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+                .zIndex(15)
                 
                 // Lilly – decorative only
                 Image("lilly-1")
