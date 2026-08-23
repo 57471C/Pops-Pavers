@@ -70,6 +70,7 @@ struct GameView: View {
                             layerShift: layout.layerShift,
                             matchBurst: matchBurst,
                             matchPopupWidth: layout.trayTileSize * 2.15,
+                            boardOffsetX: layout.isCompact ? -layout.tileSize * 0.5 : -layout.tileSize,
                             onTap: { tile in
                                 selectTile(tile)
                             },
@@ -612,6 +613,7 @@ struct BoardLayer: View {
     let layerShift: CGSize
     var matchBurst: BoardScoreBurst? = nil
     var matchPopupWidth: CGFloat = 80
+    var boardOffsetX: CGFloat = 0
     let onTap: (BoardTile) -> Void
     let onBlockedTap: (BoardTile) -> Void
     
@@ -638,7 +640,7 @@ struct BoardLayer: View {
             }
         }
         .frame(width: 5 * cellSpacing + tileSize, height: 4 * cellSpacing + tileSize)
-        .offset(x: -tileSize)
+        .offset(x: boardOffsetX)
     }
 }
 
