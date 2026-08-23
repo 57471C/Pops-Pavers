@@ -7,24 +7,32 @@ struct PlumbingBonusView: View {
     var onFinished: (() -> Void)? = nil
     
     @State private var started = false
+    @State private var pickedLevel: FlowLevel?
     
     var body: some View {
-        if started {
-            playView
+        if started, let level = pickedLevel {
+            playView(level)
         } else {
             BonusTitleView(
-                onPlay: { started = true },
+                onPlay: {
+                    if pickedLevel == nil {
+                        pickedLevel = difficulty.pickRandomLevel()
+                    }
+                    started = true
+                },
                 onBack: onExit
             )
         }
     }
     
-    private var playView: some View {
-        FlowGridView(
-            level: difficulty.levels[0],
+    private func playView(_ level: FlowLevel) -> some View {
+        let pack = difficulty.levels
+        let number = (pack.firstIndex(where: { $0.id == level.id }) ?? 0) + 1
+        return FlowGridView(
+            level: level,
             packName: difficulty.displayName,
-            levelNumber: 1,
-            levelCount: 1,
+            levelNumber: number,
+            levelCount: pack.count,
             onBack: {
                 started = false
             },
@@ -33,7 +41,7 @@ struct PlumbingBonusView: View {
             },
             rewards: rewards
         )
-        .id(difficulty.levels[0].id)
+        .id(level.id)
     }
 }
 

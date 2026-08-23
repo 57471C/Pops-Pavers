@@ -102,6 +102,27 @@ enum FlowDifficulty: String, CaseIterable, Identifiable {
         }
     }
     
+    private static let lastPickedLevelIDKey = "lastBonusFlowLevelID"
+    
+    /// Random map from this tier, avoiding the map played last time when possible.
+    func pickRandomLevel() -> FlowLevel {
+        let pool = levels
+        guard let first = pool.first else {
+            return FlowLevel(id: 0, size: 5, pairs: [])
+        }
+        let lastID = UserDefaults.standard.object(forKey: Self.lastPickedLevelIDKey) as? Int
+        let candidates: [FlowLevel]
+        if let lastID, pool.count > 1 {
+            let filtered = pool.filter { $0.id != lastID }
+            candidates = filtered.isEmpty ? pool : filtered
+        } else {
+            candidates = pool
+        }
+        let chosen = candidates.randomElement() ?? first
+        UserDefaults.standard.set(chosen.id, forKey: Self.lastPickedLevelIDKey)
+        return chosen
+    }
+    
     /// Bonus after completing main levels 5, 10, 15, 20, 25, …
     static func triggered(afterCompletingMainLevel level: Int) -> FlowDifficulty? {
         guard level >= 5, level % 5 == 0 else { return nil }

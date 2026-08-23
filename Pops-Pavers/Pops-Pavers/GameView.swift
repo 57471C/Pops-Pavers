@@ -27,12 +27,14 @@ struct GameView: View {
                             afterCompletingMainLevel: game.level
                         ),
                         onExit: {
+                            clearScorePopups()
                             bonusDifficulty = nil
                             game.fullReset()
                             onExitToTitle()
                         },
                         onFinished: {
                             let completedLevel = game.level
+                            clearScorePopups()
                             bonusDifficulty = nil
                             game.advanceToNextLevel()
                             game.applyBonusRewards(afterCompletingLevel: completedLevel)
@@ -173,30 +175,8 @@ struct GameView: View {
                     }
                 }
                 
-                ZStack {
-                    Image("tray")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: layout.trayHeight)
-                    
-                    HStack(spacing: layout.trayTileSpacing) {
-                        ForEach(0..<7, id: \.self) { index in
-                            if index < game.tray.count {
-                                TileView(tile: game.tray[index], size: layout.trayTileSize)
-                            } else {
-                                Color.clear.frame(width: layout.trayTileSize, height: layout.trayTileSize)
-                            }
-                        }
-                    }
-                    .offset(y: layout.trayTileOffsetY)
-                    .overlay(alignment: .leading) {
-                        if trayClearBurst > 0 {
-                            ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
-                                .id(trayClearBurst)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
+                trayGraphic(layout: layout)
+                    .frame(maxWidth: .infinity)
                 
                 circleActionButton(
                     icon: "arrow.uturn.backward",
@@ -214,6 +194,57 @@ struct GameView: View {
             .padding(.horizontal, layout.isCompact ? 8 : 16)
             .padding(.bottom, layout.trayBottom)
         }
+    }
+    
+    @ViewBuilder
+    private func traySlot(_ index: Int, layout: GameLayout) -> some View {
+        if index < game.tray.count {
+            TileView(tile: game.tray[index], size: layout.trayTileSize)
+        } else {
+            Color.clear.frame(width: layout.trayTileSize, height: layout.trayTileSize)
+        }
+    }
+    
+    private func trayGraphic(layout: GameLayout) -> some View {
+        let trayWidth = layout.trayDrawnWidth
+        let trayHeight = layout.trayHeight
+        return Image("tray")
+            .resizable()
+            .scaledToFit()
+            .frame(width: trayWidth, height: trayHeight)
+            .overlay {
+                if layout.isCompact {
+                    HStack(spacing: layout.trayTileSpacing) {
+                        ForEach(0..<7, id: \.self) { index in
+                            traySlot(index, layout: layout)
+                        }
+                    }
+                    .offset(y: layout.trayTileOffsetY)
+                    .overlay(alignment: .leading) {
+                        if trayClearBurst > 0 {
+                            ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
+                                .id(trayClearBurst)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(0..<7, id: \.self) { index in
+                            ZStack {
+                                traySlot(index, layout: layout)
+                                if index == 0, trayClearBurst > 0 {
+                                    ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
+                                        .id(trayClearBurst)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                    .padding(.leading, trayWidth * layout.trayInnerLeft)
+                    .padding(.trailing, trayWidth * layout.trayInnerRight)
+                    .padding(.top, trayHeight * layout.trayInnerTop)
+                    .padding(.bottom, trayHeight * layout.trayInnerBottom)
+                }
+            }
     }
     
     private func circleActionButton(
@@ -378,23 +409,32 @@ struct GameView: View {
         if game.didWin {
             audio.playButton()
             if let diff = FlowDifficulty.triggered(afterCompletingMainLevel: game.level) {
+                clearScorePopups()
                 bonusDifficulty = diff
             } else {
+                clearScorePopups()
                 withAnimation {
                     game.advanceToNextLevel()
                 }
             }
         } else if game.lives <= 0 {
+            clearScorePopups()
             game.fullReset()
             withAnimation {
                 onExitToTitle()
             }
         } else {
             audio.playButton()
+            clearScorePopups()
             withAnimation {
                 game.loseLifeAndRestart()
             }
         }
+    }
+    
+    private func clearScorePopups() {
+        matchBurst = nil
+        trayClearBurst = 0
     }
     
     private func selectTile(_ tile: BoardTile) {
@@ -404,7 +444,9 @@ struct GameView: View {
             game.select(tile)
         }
         
+        let levelAtSelect = game.level
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            guard game.level == levelAtSelect, bonusDifficulty == nil else { return }
             if game.justMatched {
                 audio.playMatch()
                 matchBurst = BoardScoreBurst(
@@ -418,6 +460,7 @@ struct GameView: View {
             if game.justClearedTray {
                 game.justClearedTray = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                    guard game.level == levelAtSelect, bonusDifficulty == nil else { return }
                     audio.playTrayCleared()
                     trayClearBurst += 1
                 }
@@ -487,8 +530,14 @@ private struct GameLayout {
     }
     
     var trayHeight: CGFloat { isCompact ? 84 : 140 }
+    var trayDrawnWidth: CGFloat { trayHeight * (1334.0 / 281.0) }
+    /// Pocket grid of tray.png (1334×281): 7 recesses, ~3.95% side rims.
+    var trayInnerLeft: CGFloat { 0.0395 }
+    var trayInnerRight: CGFloat { 0.0395 }
+    var trayInnerTop: CGFloat { 0.199 }
+    var trayInnerBottom: CGFloat { 0.263 }
     var trayTileSpacing: CGFloat { isCompact ? 3 : 9 }
-    var trayTileOffsetY: CGFloat { isCompact ? -4 : -6 }
+    var trayTileOffsetY: CGFloat { isCompact ? -4 : 0 }
     var shuffleSize: CGFloat { isCompact ? 42 : 52 }
     var trayButtonSpacing: CGFloat { isCompact ? 6 : 12 }
     var trayTileSize: CGFloat {
