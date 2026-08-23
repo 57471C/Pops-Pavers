@@ -130,6 +130,7 @@ Keep existing main-game win sounds. Bonus success uses `bonus-success`.
 - Responsive layout needed for both iPhone and iPad (GeometryReader / size checks)
 - `GeometryReader` + `.ignoresSafeArea()` makes `geo.safeAreaInsets` **0**. Compact layouts use hardcoded top/bottom insets instead of relying on that GeometryReader
 - App Icon must be opaque 1024×1024 (JPG preferred to avoid alpha issues)
+- Do not commit Xcode user state: `xcuserdata/`, `*.xcuserstate`, `.DS_Store` (see `.gitignore`)
 - Key files: `GameView.swift`, `GameState.swift`, `TitleView.swift`, `FlowModels.swift`, `HosePiece.swift`, `FlowGridView.swift`, `PlumbingBonusView.swift`, `BonusTitleView.swift`, `BonusChestRevealView.swift`, `AudioManager.swift`
 
 ## Constraints (do not regress)
