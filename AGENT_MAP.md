@@ -1,12 +1,12 @@
 # Pop's Pavers – Agent Map
 
-Last updated: 20 August 2026
+Last updated: 23 August 2026
 
 ## Project Overview
 - **Name**: Pop's Pavers
 - **Type**: Native SwiftUI iOS/iPadOS tile-matching game (3-of-a-kind)
 - **Inspiration**: 3 Tiles / Triple Match style + garden/plumbing theme
-- **Target player**: Older player ("Pop") + family
+- **Target player**: Older player ("Pop") + family — keep copy and HUD readable
 - **Repo**: https://github.com/57471C/Pops-Pavers
 - **Bundle ID**: studio.lean.pops-pavers (or current one in Xcode)
 - **Distribution**: TestFlight (Internal)
@@ -25,6 +25,8 @@ Last updated: 20 August 2026
 
 ### Scoring & Progression
 - +10 points per match of 3
+- +10 match popup: float `score-10` up from the **board cell of the 3rd paver** that completed the match. Size = `trayTileSize * 2.15`. Uses the existing match SFX — no extra sound.
+- +5 tray-clear bonus: after the first paver is placed in a level, whenever a match empties the tray (`justClearedTray`) award **+5**, play `tray-cleared.mp3`, and float a smaller `score-5` (`trayTileSize * 1.15`) up from the first tray slot. Delay the +5 popup and SFX **0.24s** after the +10 so it feels extra. Do **not** award this on the level’s final match (board also empty). Do **not** award on undo or on a fresh empty tray at level start.
 - Level counter increases on each win
 - Every 5 levels: unlock one additional icon (starts at 5 icons, up to 20)
 - Every 10 levels:
@@ -35,9 +37,13 @@ Last updated: 20 August 2026
 
 ### Reshuffles & Undos
 - Start with **1 reshuffle** per run
-- Earn +1 reshuffle every 10 levels
-- Reshuffle now re-deals the **remaining board tiles** (not the tray)
-- Undo: 2 per run (planned / in progress) – reverses last board→tray move
+- Earn +1 reshuffle every 10 levels (`shufflesForCurrentLevel`)
+- Reshuffle re-deals the **remaining board tiles** (not the tray)
+- Undo is live: starts at **2 per level** (`undosForCurrentLevel`), reverses last board→tray move
+- Each new main-game level **resets** undos to the current max — unused undos do **not** carry over
+- Extra Undo after completing **5, 15, 25…** raises that max (level 6–15: 3, 16–25: 4, …)
+- Do **not** increment `undosRemaining` in `applyBonusRewards` — that double-grants on top of the per-level reset
+- Do **not** double-grant shuffle or banked life in `applyBonusRewards` — those already come from `startNewLevel()` / `recordLevelCompleted()`
 
 ### Lives & Bank
 - 3 hearts per run
@@ -52,34 +58,91 @@ Last updated: 20 August 2026
 - Multiple layers with covering logic (a higher tile can block multiple below)
 - Icon counts always multiples of 3
 
+### Plumbing Bonus (Flow-style hose puzzle)
+Triggered after completing main levels **5, 10, 15, 20…** (`FlowDifficulty.triggered`).
+
+| After main level | Difficulty | Grid |
+| --- | --- | --- |
+| 5 | Easy | 5×5 |
+| 10, 15 | Medium | 6×6 |
+| 20+ (every 5) | Hard | 7×7 |
+
+- Shown as an **in-place overlay** in `GameView` (not `fullScreenCover` — that slid up over the board)
+- Flow: `BonusTitleView` → `FlowGridView` → `BonusChestRevealView`
+- Lilly tap on the **title screen is disabled** (decorative only). Bonus is reached only via the main-game milestone
+- 7 hose colours: red, blue, green, yellow, orange, cyan, purple
+- Each colour uses 3 assets: straight (`hose-*-h`), inside corner, outside corner, plus matching `tap-*`
+- Hose lighting: highlight on **top** for horizontals, **left** for verticals
+- Vertical straight: up→down = 270° + mirrored; down→up = 270° not mirrored
+- Hose stubs at taps (half-cell toward enter/leave)
+- `hose.mp3` plays **once per newly filled cell**, not looping while dragging
+- `bonus-start` plays **once** (do not loop); then `bonus-background-1` loops
+- Mute must **not** break bonus music — it only sets volume to 0
+
+#### Chest rewards
+Tap-paced reveal. Do **not** auto-close the chest. Don’t rush.
+
+Sequence: wait 3.2s → zoom chest → per reward: open / bling / wait tap / close → Continue.
+
+Chest sprite sheet: **6 frames**, each **333×348**. Crop then scale, `interpolation(.none)`, `drawingGroup()`.
+
+Displayed rewards after completing main level N:
+
+- Next unlocked paver icon when the next level adds one (`icon-6` after 5, `icon-7` after 10, …)
+- Levels 5 / 15 / 25…: Extra Undo (raises `undosForCurrentLevel` for the next main level; chest still **shows** it)
+- Levels 10 / 20 / 30…: Extra Shuffle + Banked Life (already granted by main progression; chest still **shows** them)
+
+Keep existing main-game win sounds. Bonus success uses `bonus-success`.
+
 ### Audio
 - Title music + multiple gameplay tracks
 - On PLAY: create a random order of gameplay tracks and cycle every 10 levels
-- SFX: paver-good, paver-bad, paver-match, level-win, level-lose, button, etc.
-- Mute toggles background music only
+- SFX: paver-good, paver-bad, paver-match, level-win, level-lose, button, play-button, win-applause, tray-cleared
+- Bonus SFX: hose, flow-connect, bonus-success, chest-open, chest-close, reward-bling
+- Mute toggles background music only (volume 0, players still run)
+- `AudioManager.stopAll()` on `UIApplication.willResignActive` in `PopsPaversApp`
 
 ## UI / Screens
-- **TitleView**: animated title, Pop / Nan / Lilly characters, High Score, Banked Lives, PLAY button, secret cottage tap → bonus level
-- **GameView**: board, tray, lives, score, level, shuffle, mute, win/lose overlays with pop-4 / pop-5
-- **BonusLevelView**: placeholder for future Flow Free–style plumbing mini-game
+- **TitleView**: animated `title-text`, Pop / Nan / Lilly, High Score, Banked Lives, PLAY. Lilly is **not** tappable. iPhone `titleTop` is **88** so the wordmark (including the leaf) sits under the Dynamic Island. Full-bleed `GeometryReader` + `ignoresSafeArea()` — do not add safe-area padding on the whole view or the background will show a white border / shift
+- **GameView**: board, tray, lives, score, level, shuffle, undo, mute, win/lose/game-over overlays. Bonus replaces the main board in the same ZStack
+- **Game HUD (iPhone)**: two-row chrome (Back/Mute, then Easy/Flows on bonus). Keep original full-bleed background. Do not “fix” Dynamic Island by wrapping the whole game in safe-area padding
+- **Board**: shifted left about one tile (`.offset(x: -tileSize)` on `BoardLayer`) on iPhone and iPad
+- **Win / fail / game-over overlays**: Nan + Pop at the bottom. iPhone characters sit lower (`overlayCharacterBottom` **-44**) so they cover the tray. Per-pose iPhone insets:
+  - Nan leading: win **16**, fail/game-over **40** (`overlayNanLeading` takes `isCompact` — `layout` is not in GameView scope)
+  - Pop trailing: game-over **24**, otherwise **0**
+  - iPad Nan leading / Pop trailing: **-8**
+- Overlay art: win `nan-1` / `pop-4`; fail `nan-2` / `pop-2`; game over `nan-3` / `pop-5`
+- **BonusTitleView** + **FlowGridView** + **BonusChestRevealView**: plumbing intro, hose board, chest reward sequence
 
 ## Important Asset Names
 - Pavers: `paver-1` … `paver-6` (lowercase)
 - Icons: `icon-1` … `icon-20`
-- Backgrounds: `game-background`, `game-background-1` … `4`
-- Characters: `pop-1`, `pop-4`, `pop-5`, `nan-4`, `lilly-1`
-- UI: `tray`, `mute`, `unmute`, `level-complete`, `level-failed`, `tap`
+- Backgrounds: `game-background`, `game-background-1` … `4`, `title-background`
+- Title: `title-text`, `title-bonus`, `title-3stars`
+- Characters: `pop-1` … `pop-5`, `nan-1` … `nan-4`, `lilly-1` … `lilly-4`
+- UI: `tray`, `mute`, `unmute`, `level-complete`, `level-failed`, `game-over`, `chest`, `score-5`, `score-10`
+- Bonus hoses / taps: `hose-{color}-h`, `hose-{color}-inside`, `hose-{color}-outside`, `tap-{color}` (seven colours)
 
 ## Technical Notes
 - SwiftUI + `@Observable` GameState
 - AVFoundation via AudioManager.shared
 - UserDefaults for highScore + lifeBank
 - Responsive layout needed for both iPhone and iPad (GeometryReader / size checks)
+- `GeometryReader` + `.ignoresSafeArea()` makes `geo.safeAreaInsets` **0**. Compact layouts use hardcoded top/bottom insets instead of relying on that GeometryReader
 - App Icon must be opaque 1024×1024 (JPG preferred to avoid alpha issues)
+- Key files: `GameView.swift`, `GameState.swift`, `TitleView.swift`, `FlowModels.swift`, `HosePiece.swift`, `FlowGridView.swift`, `PlumbingBonusView.swift`, `BonusTitleView.swift`, `BonusChestRevealView.swift`, `AudioManager.swift`
+
+## Constraints (do not regress)
+- Keep existing main-game win sounds
+- Older-player readability
+- Do not loop `bonus-start`
+- Do not auto-close the chest
+- Don’t rush the chest sequence
+- Mute must not break bonus music
+- Do not double-grant shuffle / life
+- Do not restore Lilly as a title-screen bonus cheat unless asked
 
 ## Near-term Ideas / Backlog
-- [ ] Finish Undo button (2 per run)
-- [ ] Implement real Flow Free–style plumbing bonus levels (secret cottage tap already wired)
 - [ ] More board shapes and awkward higher-level layouts
 - [ ] Possible Android port later (Flutter recommended if needed)
 - [ ] Polish iPhone spacing further if anything still feels tight
@@ -90,4 +153,5 @@ When continuing work on this project:
 2. Prefer full-file replacements over tiny scattered patches when the user is frustrated with merge conflicts / syntax errors.
 3. Always keep iPhone + iPad layouts working.
 4. Paver image names are **lowercase** (`paver-1` etc.).
-5. Preserve the existing scoring, lives, bank, and progression rules unless explicitly asked to change them.
+5. Preserve the existing scoring, lives, bank, bonus rewards, and progression rules unless explicitly asked to change them.
+6. When moving overlay characters, change only the requested screen / device (iPhone vs iPad, win vs fail vs game over).

@@ -12,6 +12,8 @@ class GameState {
     var undosRemaining = 2
     var lastUndoableTileID: UUID?
     var justMatched = false
+    var justClearedTray = false
+    private var hasPlacedInTrayThisLevel = false
     var lives = 3
     var score = 0
     var level = 1
@@ -29,6 +31,13 @@ class GameState {
     
     var shufflesForCurrentLevel: Int {
         max(1, (max(1, level) - 1) / 10)
+    }
+    
+    /// Starts at 2. +1 after completing 5, 15, 25… (the Extra Undo bonus).
+    var undosForCurrentLevel: Int {
+        let current = max(1, level)
+        guard current > 5 else { return 2 }
+        return 3 + (current - 6) / 10
     }
     
     var canUndo: Bool {
@@ -93,10 +102,13 @@ class GameState {
         isGameOver = false
         didWin = false
         shufflesRemaining = shufflesForCurrentLevel
+        undosRemaining = undosForCurrentLevel
         justMatched = false
+        justClearedTray = false
+        hasPlacedInTrayThisLevel = false
         justEarnedBankLife = false
         lastUndoableTileID = nil
-        // don’t reset lives, score, life bank, or undos here – only reset those on full restart / title
+        // don’t reset lives, score, or life bank here – only reset those on full restart / title
     }
     
     // MARK: - Level generation
@@ -327,6 +339,7 @@ class GameState {
         
         let moved = board.remove(at: index)
         tray.append(moved)
+        hasPlacedInTrayThisLevel = true
         lastUndoableTileID = moved.id
         
         updateFreeTiles()
@@ -363,8 +376,14 @@ class GameState {
                     return false
                 }
                 score += 10
-                statusMessage = "Matched 3!  +10"
                 justMatched = true
+                if tray.isEmpty && !board.isEmpty && hasPlacedInTrayThisLevel {
+                    score += 5
+                    justClearedTray = true
+                    statusMessage = "Matched 3!  +10   Tray +5"
+                } else {
+                    statusMessage = "Matched 3!  +10"
+                }
                 updateHighScoreIfNeeded()
                 return
             }
@@ -429,12 +448,9 @@ class GameState {
         startNewLevel()
     }
     
-    func applyBonusRewards(afterCompletingLevel level: Int) {
-        // Shuffle and banked life at 10/20/30… are already applied by
-        // startNewLevel() / recordLevelCompleted(). Only Extra Undo is new.
-        if level % 10 == 5 {
-            undosRemaining += 1
-        }
+    func applyBonusRewards(afterCompletingLevel _: Int) {
+        // Shuffle, banked life, and Extra Undo are already applied by
+        // startNewLevel() / recordLevelCompleted() / undosForCurrentLevel.
     }
     
     func loseLifeAndRestart() {

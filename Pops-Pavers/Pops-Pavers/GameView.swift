@@ -8,6 +8,8 @@ struct GameView: View {
     @State private var game = GameState()
     @State private var audio = AudioManager.shared
     @State private var bonusDifficulty: FlowDifficulty?
+    @State private var trayClearBurst = 0
+    @State private var matchBurst: BoardScoreBurst?
     
     var body: some View {
         GeometryReader { geo in
@@ -54,6 +56,8 @@ struct GameView: View {
                             tileSize: layout.tileSize,
                             cellSpacing: layout.cellSpacing,
                             layerShift: layout.layerShift,
+                            matchBurst: matchBurst,
+                            matchPopupWidth: layout.trayTileSize * 2.15,
                             onTap: { tile in
                                 selectTile(tile)
                             },
@@ -185,6 +189,12 @@ struct GameView: View {
                         }
                     }
                     .offset(y: layout.trayTileOffsetY)
+                    .overlay(alignment: .leading) {
+                        if trayClearBurst > 0 {
+                            ScorePopup(imageName: "score-5", width: layout.trayTileSize * 1.15)
+                                .id(trayClearBurst)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -397,7 +407,20 @@ struct GameView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if game.justMatched {
                 audio.playMatch()
+                matchBurst = BoardScoreBurst(
+                    token: (matchBurst?.token ?? 0) + 1,
+                    row: tile.row,
+                    col: tile.col,
+                    layer: tile.layer
+                )
                 game.justMatched = false
+            }
+            if game.justClearedTray {
+                game.justClearedTray = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                    audio.playTrayCleared()
+                    trayClearBurst += 1
+                }
             }
             
             if game.isGameOver {
@@ -409,6 +432,38 @@ struct GameView: View {
                 }
             }
         }
+    }
+}
+
+struct BoardScoreBurst: Equatable {
+    var token: Int
+    var row: Int
+    var col: Int
+    var layer: Int
+}
+
+private struct ScorePopup: View {
+    var imageName: String
+    var width: CGFloat
+    
+    @State private var rise: CGFloat = 0
+    @State private var opacity: Double = 0
+    
+    var body: some View {
+        Image(imageName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: width)
+            .offset(y: rise)
+            .opacity(opacity)
+            .allowsHitTesting(false)
+            .onAppear {
+                opacity = 1
+                withAnimation(.easeOut(duration: 0.7).delay(0.08)) {
+                    rise = -58
+                    opacity = 0
+                }
+            }
     }
 }
 
@@ -464,6 +519,8 @@ struct BoardLayer: View {
     let tileSize: CGFloat
     let cellSpacing: CGFloat
     let layerShift: CGSize
+    var matchBurst: BoardScoreBurst? = nil
+    var matchPopupWidth: CGFloat = 80
     let onTap: (BoardTile) -> Void
     let onBlockedTap: (BoardTile) -> Void
     
@@ -478,6 +535,15 @@ struct BoardLayer: View {
                     onTap: onTap,
                     onBlockedTap: onBlockedTap
                 )
+            }
+            
+            if let burst = matchBurst {
+                let x = CGFloat(burst.col - 2) * cellSpacing + CGFloat(burst.layer) * layerShift.width
+                let y = CGFloat(burst.row - 1) * cellSpacing - CGFloat(burst.layer) * layerShift.height
+                ScorePopup(imageName: "score-10", width: matchPopupWidth)
+                    .id(burst.token)
+                    .offset(x: x, y: y)
+                    .zIndex(1000)
             }
         }
         .frame(width: 5 * cellSpacing + tileSize, height: 4 * cellSpacing + tileSize)

@@ -135,6 +135,7 @@ class AudioManager {
     func playChestOpen()    { playSFX("chest-open") }
     func playChestClose()   { playSFX("chest-close") }
     func playRewardBling()  { playSFX("reward-bling") }
+    func playTrayCleared()  { playSFX("tray-cleared") }
     func playGameOver() {
         stopMusic()
         playSFX("game-over")
