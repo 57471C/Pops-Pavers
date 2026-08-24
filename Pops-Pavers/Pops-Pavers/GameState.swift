@@ -397,25 +397,47 @@ class GameState {
     }
     
     private func checkForMatch() {
-        let counts = Dictionary(grouping: allTrayTiles, by: { $0.iconName })
+        let allTiles = allTrayTiles
+        var matchedIcon: String?
         
-        for (iconName, group) in counts {
-            if group.count >= 3 {
-                let ids = Set(group.prefix(3).map(\.id))
-                tray.removeAll { ids.contains($0.id) }
-                overflowTray.removeAll { ids.contains($0.id) }
-                score += 10
-                justMatched = true
-                if tray.isEmpty && overflowTray.isEmpty && !board.isEmpty && hasPlacedInTrayThisLevel {
-                    score += 5
-                    justClearedTray = true
-                    statusMessage = "Matched 3!  +10   Tray +5"
-                } else {
-                    statusMessage = "Matched 3!  +10"
+        for i in 0..<allTiles.count {
+            let iconName = allTiles[i].iconName
+            var count = 1
+            for j in (i + 1)..<allTiles.count {
+                if allTiles[j].iconName == iconName {
+                    count += 1
+                    if count == 3 {
+                        matchedIcon = iconName
+                        break
+                    }
                 }
-                updateHighScoreIfNeeded()
-                return
             }
+            if matchedIcon != nil { break }
+        }
+
+        if let icon = matchedIcon {
+            var removedCount = 0
+            tray.removeAll {
+                guard removedCount < 3, $0.iconName == icon else { return false }
+                removedCount += 1
+                return true
+            }
+            overflowTray.removeAll {
+                guard removedCount < 3, $0.iconName == icon else { return false }
+                removedCount += 1
+                return true
+            }
+            score += 10
+            justMatched = true
+            if tray.isEmpty && overflowTray.isEmpty && !board.isEmpty && hasPlacedInTrayThisLevel {
+                score += 5
+                justClearedTray = true
+                statusMessage = "Matched 3!  +10   Tray +5"
+            } else {
+                statusMessage = "Matched 3!  +10"
+            }
+            updateHighScoreIfNeeded()
+            return
         }
     }
     
