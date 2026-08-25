@@ -113,8 +113,10 @@ class AudioManager {
             player.play()
             sfxPlayers.append(player)
             
-            // Clean up finished players
-            sfxPlayers.removeAll { !$0.isPlaying }
+            // Clean up finished players periodically to avoid O(N) cost on every play
+            if sfxPlayers.count >= 32 {
+                sfxPlayers.removeAll { !$0.isPlaying }
+            }
         } catch {
             print("Error playing SFX: \(error)")
         }
