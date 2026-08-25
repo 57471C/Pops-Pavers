@@ -124,4 +124,92 @@ final class GameStateTests: XCTestCase {
         XCTAssertTrue(gameState.overflowTray.isEmpty, "overflowTray should be empty after starting a new level")
         XCTAssertFalse(gameState.board.isEmpty, "board should be populated after starting a new level")
     }
+
+    func testUndoLastMove_whenNoUndosRemaining_doesNothing() {
+        let gameState = GameState()
+        gameState.undosRemaining = 0
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.tray = [testTile]
+        gameState.lastUndoableTileID = testTile.id
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board should not change when out of undos")
+        XCTAssertEqual(gameState.tray.count, 1, "Tile should remain in tray")
+        XCTAssertEqual(gameState.undosRemaining, 0, "Undos should remain 0")
+    }
+
+    func testUndoLastMove_whenGameOver_doesNothing() {
+        let gameState = GameState()
+        gameState.isGameOver = true
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.tray = [testTile]
+        gameState.lastUndoableTileID = testTile.id
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board should not change when game is over")
+        XCTAssertEqual(gameState.tray.count, 1, "Tile should remain in tray")
+    }
+
+    func testUndoLastMove_whenLastUndoableTileIDNil_doesNothing() {
+        let gameState = GameState()
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.tray = [testTile]
+        gameState.lastUndoableTileID = nil
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board should not change when lastUndoableTileID is nil")
+        XCTAssertEqual(gameState.tray.count, 1, "Tile should remain in tray")
+    }
+
+    func testUndoLastMove_fromTray() {
+        let gameState = GameState()
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.tray = [testTile]
+        gameState.lastUndoableTileID = testTile.id
+        gameState.undosRemaining = 1
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount + 1, "Board should have 1 more tile after undo from tray")
+        XCTAssertTrue(gameState.tray.isEmpty, "Tray should be empty after undo")
+        XCTAssertTrue(gameState.board.contains(where: { $0.id == testTile.id }), "The undone tile should be on the board")
+        XCTAssertNil(gameState.lastUndoableTileID, "lastUndoableTileID should be cleared")
+    }
+
+    func testUndoLastMove_fromOverflowTray() {
+        let gameState = GameState()
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.overflowTray = [testTile]
+        gameState.lastUndoableTileID = testTile.id
+        gameState.undosRemaining = 1
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount + 1, "Board should have 1 more tile after undo from overflow tray")
+        XCTAssertTrue(gameState.overflowTray.isEmpty, "Overflow tray should be empty after undo")
+        XCTAssertTrue(gameState.board.contains(where: { $0.id == testTile.id }), "The undone tile should be on the board")
+        XCTAssertNil(gameState.lastUndoableTileID, "lastUndoableTileID should be cleared")
+    }
+
+    func testUndoLastMove_tileNotInTrays_doesNothing() {
+        let gameState = GameState()
+        let testTile = BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)
+        gameState.lastUndoableTileID = testTile.id
+        gameState.undosRemaining = 1
+        // Do NOT add to tray or overflowTray
+
+        let initialBoardCount = gameState.board.count
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board should not change if tile is not in trays")
+        XCTAssertEqual(gameState.lastUndoableTileID, testTile.id, "lastUndoableTileID should remain unchanged if undo fails")
+    }
 }
