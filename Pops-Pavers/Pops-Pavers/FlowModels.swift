@@ -430,15 +430,22 @@ class FlowGameState {
         switch cell(at: pos) {
         case .endpoint(let color):
             activeColor = color
+            clearPath(color)
             paths[color] = [pos]
             dragDidChange = true
-            rebuildGrid()
+            refreshCompleteness()
         case .pipe(let color):
             activeColor = color
             if let path = paths[color], let index = path.firstIndex(of: pos) {
+                for i in (index + 1)..<path.count {
+                    let p = path[i]
+                    if case .pipe(let c) = cell(at: p), c == color {
+                        setCell(p, to: .empty)
+                    }
+                }
                 paths[color] = Array(path.prefix(index + 1))
                 dragDidChange = true
-                rebuildGrid()
+                refreshCompleteness()
             }
         case .empty:
             activeColor = nil
@@ -472,7 +479,7 @@ class FlowGameState {
         }
         activeColor = nil
         dragDidChange = false
-        rebuildGrid()
+        refreshCompleteness()
     }
     
     private func tryStep(to pos: GridPos) -> Bool {
@@ -482,10 +489,16 @@ class FlowGameState {
         guard inBounds(pos), pos.isAdjacent(to: last) else { return false }
         
         if let existing = path.firstIndex(of: pos) {
+            for i in (existing + 1)..<path.count {
+                let p = path[i]
+                if case .pipe(let c) = cell(at: p), c == color {
+                    setCell(p, to: .empty)
+                }
+            }
             path = Array(path.prefix(existing + 1))
             paths[color] = path
             dragDidChange = true
-            rebuildGrid()
+            refreshCompleteness()
             return true
         }
         
@@ -498,7 +511,7 @@ class FlowGameState {
             path.append(pos)
             paths[color] = path
             dragDidChange = true
-            rebuildGrid()
+            refreshCompleteness()
             return false
         default:
             break
@@ -506,31 +519,23 @@ class FlowGameState {
         
         path.append(pos)
         paths[color] = path
+        if !cell(at: pos).isEndpoint {
+            setCell(pos, to: .pipe(color))
+        }
         dragDidChange = true
-        rebuildGrid()
+        refreshCompleteness()
         return true
     }
     
     private func clearPath(_ color: FlowColor) {
-        paths[color] = nil
-    }
-    
-    private func rebuildGrid() {
-        grid = Array(
-            repeating: Array(repeating: FlowCell.empty, count: size),
-            count: size
-        )
-        for pair in level.pairs {
-            setCell(pair.start, to: .endpoint(pair.color))
-            setCell(pair.end, to: .endpoint(pair.color))
-        }
-        for (color, path) in paths {
+        if let path = paths[color] {
             for pos in path {
-                if case .endpoint = cell(at: pos) { continue }
-                setCell(pos, to: .pipe(color))
+                if case .pipe(let c) = cell(at: pos), c == color {
+                    setCell(pos, to: .empty)
+                }
             }
         }
-        refreshCompleteness()
+        paths[color] = nil
     }
     
     func isPairConnected(_ pair: FlowPair) -> Bool {
