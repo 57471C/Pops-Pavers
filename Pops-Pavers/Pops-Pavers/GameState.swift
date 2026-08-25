@@ -339,16 +339,38 @@ class GameState {
     
     // MARK: - Free tile logic
     private func updateFreeTiles() {
+        struct Pos: Hashable {
+            let r: Int
+            let c: Int
+        }
+
+        var maxLayerAt = [Pos: Int]()
+        maxLayerAt.reserveCapacity(board.count)
+
+        for tile in board {
+            let pos = Pos(r: tile.row, c: tile.col)
+            if let currentMax = maxLayerAt[pos] {
+                if tile.layer > currentMax {
+                    maxLayerAt[pos] = tile.layer
+                }
+            } else {
+                maxLayerAt[pos] = tile.layer
+            }
+        }
+
         for i in board.indices {
             let tile = board[i]
+            var isCovered = false
             
-            let isCovered = board.contains { other in
-                guard other.id != tile.id && other.layer > tile.layer else { return false }
-                
-                let rowDiff = abs(other.row - tile.row)
-                let colDiff = abs(other.col - tile.col)
-                
-                return rowDiff <= 1 && colDiff <= 1
+            for dr in -1...1 {
+                for dc in -1...1 {
+                    let pos = Pos(r: tile.row + dr, c: tile.col + dc)
+                    if let maxLayer = maxLayerAt[pos], maxLayer > tile.layer {
+                        isCovered = true
+                        break
+                    }
+                }
+                if isCovered { break }
             }
             
             board[i].isFree = !isCovered
