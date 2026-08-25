@@ -124,4 +124,84 @@ final class GameStateTests: XCTestCase {
         XCTAssertTrue(gameState.overflowTray.isEmpty, "overflowTray should be empty after starting a new level")
         XCTAssertFalse(gameState.board.isEmpty, "board should be populated after starting a new level")
     }
+
+    func testUseBankedLife_Success() {
+        UserDefaults.standard.removeObject(forKey: "lifeBank")
+
+        let gameState = GameState()
+        gameState.addToLifeBank(1)
+        gameState.lives = 0
+        gameState.isGameOver = true
+        gameState.didWin = false
+
+        let result = gameState.useBankedLife()
+
+        XCTAssertTrue(result, "useBankedLife should return true when successful")
+        XCTAssertEqual(gameState.lives, 1, "Lives should be restored to 1")
+        XCTAssertEqual(gameState.lifeBank, 0, "Life bank should be decremented")
+        XCTAssertFalse(gameState.isGameOver, "Game should restart (isGameOver = false)")
+
+        let savedLifeBank = UserDefaults.standard.integer(forKey: "lifeBank")
+        XCTAssertEqual(savedLifeBank, 0, "UserDefaults should be updated with new lifeBank value")
+    }
+
+    func testUseBankedLife_NoBankedLives_ReturnsFalse() {
+        UserDefaults.standard.removeObject(forKey: "lifeBank")
+
+        let gameState = GameState()
+        gameState.lifeBank = 0
+        gameState.lives = 0
+        gameState.isGameOver = true
+        gameState.didWin = false
+
+        let result = gameState.useBankedLife()
+
+        XCTAssertFalse(result, "useBankedLife should return false when lifeBank is 0")
+        XCTAssertEqual(gameState.lives, 0, "Lives should not change")
+    }
+
+    func testUseBankedLife_HasLives_ReturnsFalse() {
+        UserDefaults.standard.removeObject(forKey: "lifeBank")
+
+        let gameState = GameState()
+        gameState.addToLifeBank(1)
+        gameState.lives = 1
+        gameState.isGameOver = true
+        gameState.didWin = false
+
+        let result = gameState.useBankedLife()
+
+        XCTAssertFalse(result, "useBankedLife should return false when lives > 0")
+        XCTAssertEqual(gameState.lifeBank, 1, "Life bank should not change")
+    }
+
+    func testUseBankedLife_NotGameOver_ReturnsFalse() {
+        UserDefaults.standard.removeObject(forKey: "lifeBank")
+
+        let gameState = GameState()
+        gameState.addToLifeBank(1)
+        gameState.lives = 0
+        gameState.isGameOver = false
+        gameState.didWin = false
+
+        let result = gameState.useBankedLife()
+
+        XCTAssertFalse(result, "useBankedLife should return false when game is not over")
+        XCTAssertEqual(gameState.lifeBank, 1, "Life bank should not change")
+    }
+
+    func testUseBankedLife_DidWin_ReturnsFalse() {
+        UserDefaults.standard.removeObject(forKey: "lifeBank")
+
+        let gameState = GameState()
+        gameState.addToLifeBank(1)
+        gameState.lives = 0
+        gameState.isGameOver = true
+        gameState.didWin = true
+
+        let result = gameState.useBankedLife()
+
+        XCTAssertFalse(result, "useBankedLife should return false when game was won")
+        XCTAssertEqual(gameState.lifeBank, 1, "Life bank should not change")
+    }
 }
