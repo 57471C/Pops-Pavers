@@ -235,10 +235,65 @@ struct BonusChestRevealView: View {
     
     @MainActor
     private func playFrames(_ frames: [Int], frameDuration: Double) async {
-        for frame in frames {
-            guard !Task.isCancelled else { return }
-            chestFrame = frame
-            try? await Task.sleep(for: .seconds(frameDuration))
+        guard !frames.isEmpty else { return }
+
+        let stream = AsyncStream<CFTimeInterval> { continuation in
+            let proxy = DisplayLinkProxy { link in
+                continuation.yield(link.targetTimestamp)
+            }
+            let displayLink = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.tick))
+            proxy.displayLink = displayLink
+            displayLink.add(to: .main, forMode: .common)
+
+            continuation.onTermination = { @Sendable _ in
+                proxy.invalidate()
+            }
+        }
+
+        var frameIndex = 0
+        chestFrame = frames[frameIndex]
+        var startTime: CFTimeInterval?
+
+        for await targetTimestamp in stream {
+            if Task.isCancelled { break }
+
+            if startTime == nil {
+                startTime = targetTimestamp
+                continue
+            }
+
+            let elapsed = targetTimestamp - startTime!
+            let targetFrameIndex = Int(elapsed / frameDuration)
+
+            if targetFrameIndex > frameIndex {
+                frameIndex = targetFrameIndex
+                if frameIndex >= frames.count {
+                    chestFrame = frames.last!
+                    break
+                }
+                chestFrame = frames[frameIndex]
+            }
+        }
+    }
+}
+
+private final class DisplayLinkProxy: NSObject, @unchecked Sendable {
+    let callback: (CADisplayLink) -> Void
+    var displayLink: CADisplayLink?
+
+    init(callback: @escaping (CADisplayLink) -> Void) {
+        self.callback = callback
+        super.init()
+    }
+
+    @objc func tick(_ sender: CADisplayLink) {
+        callback(sender)
+    }
+
+    func invalidate() {
+        DispatchQueue.main.async { [weak self] in
+            self?.displayLink?.invalidate()
+            self?.displayLink = nil
         }
     }
 }
