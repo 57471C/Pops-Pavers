@@ -1,0 +1,127 @@
+import XCTest
+@testable import Pops_Pavers
+
+final class GameStateTests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        // Clear UserDefaults for isolation
+        let domain = Bundle.main.bundleIdentifier!
+        UserDefaults.standard.removePersistentDomain(forName: domain)
+        UserDefaults.standard.synchronize()
+    }
+
+    override func tearDown() {
+        let domain = Bundle.main.bundleIdentifier!
+        UserDefaults.standard.removePersistentDomain(forName: domain)
+        UserDefaults.standard.synchronize()
+        super.tearDown()
+    }
+
+    func testInitialization() {
+        let gameState = GameState()
+
+        XCTAssertEqual(gameState.lives, 3, "New game should start with 3 lives")
+        XCTAssertEqual(gameState.level, 1, "New game should start at level 1")
+        XCTAssertEqual(gameState.score, 0, "New game should start with 0 score")
+        XCTAssertFalse(gameState.isGameOver, "Game should not be over initially")
+        XCTAssertFalse(gameState.board.isEmpty, "Board should be generated and not empty")
+        XCTAssertTrue(gameState.tray.isEmpty, "Tray should start empty")
+        XCTAssertTrue(gameState.overflowTray.isEmpty, "Overflow tray should start empty")
+    }
+
+    func testSelectTile() {
+        let gameState = GameState()
+
+        // Find a free tile to select
+        guard let freeTile = gameState.board.first(where: { $0.isFree }) else {
+            XCTFail("Could not find a free tile on the generated board")
+            return
+        }
+
+        let initialBoardCount = gameState.board.count
+
+        gameState.select(freeTile)
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount - 1, "Board should have 1 less tile after selection")
+        XCTAssertEqual(gameState.tray.count, 1, "Tray should have 1 tile after selection")
+        XCTAssertEqual(gameState.tray.first?.id, freeTile.id, "The selected tile should be in the tray")
+        XCTAssertEqual(gameState.lastUndoableTileID, freeTile.id, "lastUndoableTileID should be updated to the selected tile")
+    }
+
+    func testUndoLastMove() {
+        let gameState = GameState()
+
+        guard let freeTile = gameState.board.first(where: { $0.isFree }) else {
+            XCTFail("Could not find a free tile on the generated board")
+            return
+        }
+
+        let initialBoardCount = gameState.board.count
+        let initialUndos = gameState.undosRemaining
+
+        gameState.select(freeTile)
+        gameState.undoLastMove()
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board count should be restored after undo")
+        XCTAssertTrue(gameState.tray.isEmpty, "Tray should be empty after undo")
+        XCTAssertEqual(gameState.undosRemaining, initialUndos - 1, "Undos remaining should decrease by 1")
+        XCTAssertNil(gameState.lastUndoableTileID, "lastUndoableTileID should be cleared after undo")
+        XCTAssertTrue(gameState.board.contains(where: { $0.id == freeTile.id }), "The undone tile should be back on the board")
+    }
+
+    func testSelectTile_whenNotFree_doesNothing() {
+        let gameState = GameState()
+
+        // Find a covered (not free) tile
+        guard let coveredTile = gameState.board.first(where: { !$0.isFree }) else {
+            // If random generation didn't produce a covered tile, we skip the test or fail it
+            return
+        }
+
+        let initialBoardCount = gameState.board.count
+
+        gameState.select(coveredTile)
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board count should not change when selecting a covered tile")
+        XCTAssertTrue(gameState.tray.isEmpty, "Tray should remain empty")
+    }
+
+    func testSelectTile_whenGameOver_doesNothing() {
+        let gameState = GameState()
+        gameState.isGameOver = true
+
+        guard let freeTile = gameState.board.first(where: { $0.isFree }) else { return }
+
+        let initialBoardCount = gameState.board.count
+        gameState.select(freeTile)
+
+        XCTAssertEqual(gameState.board.count, initialBoardCount, "Board count should not change when game is over")
+        XCTAssertTrue(gameState.tray.isEmpty, "Tray should remain empty")
+    }
+
+    func testStartNewLevel() {
+        let gameState = GameState()
+
+        // Mutate some properties to simulate gameplay
+        gameState.isGameOver = true
+        gameState.didWin = true
+        gameState.justMatched = true
+        gameState.justClearedTray = true
+        gameState.lastUndoableTileID = UUID()
+        gameState.tray = [BoardTile(iconName: "icon-1", paverName: "paver-1", row: 0, col: 0, layer: 0)]
+        gameState.overflowTray = [BoardTile(iconName: "icon-2", paverName: "paver-2", row: 0, col: 0, layer: 0)]
+
+        // Ensure starting level resets properties appropriately
+        gameState.startNewLevel()
+
+        XCTAssertFalse(gameState.isGameOver, "isGameOver should be false after starting a new level")
+        XCTAssertFalse(gameState.didWin, "didWin should be false after starting a new level")
+        XCTAssertFalse(gameState.justMatched, "justMatched should be false after starting a new level")
+        XCTAssertFalse(gameState.justClearedTray, "justClearedTray should be false after starting a new level")
+        XCTAssertNil(gameState.lastUndoableTileID, "lastUndoableTileID should be nil after starting a new level")
+        XCTAssertTrue(gameState.tray.isEmpty, "tray should be empty after starting a new level")
+        XCTAssertTrue(gameState.overflowTray.isEmpty, "overflowTray should be empty after starting a new level")
+        XCTAssertFalse(gameState.board.isEmpty, "board should be populated after starting a new level")
+    }
+}
