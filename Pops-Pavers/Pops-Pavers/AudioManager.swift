@@ -1,9 +1,11 @@
 import AVFoundation
 import SwiftUI
+import os
 
 @Observable
 class AudioManager {
     static let shared = AudioManager()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Pops-Pavers", category: "AudioManager")
     
     var musicPlayer: AVAudioPlayer?
     var sfxPlayers: [AVAudioPlayer] = []
@@ -91,7 +93,7 @@ class AudioManager {
     
     private func playMusic(named name: String, loop: Bool) {
         guard let url = Bundle.main.url(forResource: name, withExtension: "mp3") else {
-            print("Could not find music: \(name)")
+            logger.error("Could not find music: \(name)")
             return
         }
         
@@ -102,7 +104,7 @@ class AudioManager {
             musicPlayer?.volume = isMusicMuted ? 0 : 0.6
             musicPlayer?.play()
         } catch {
-            print("Error playing music: \(error)")
+            logger.error("Error playing music: \(error.localizedDescription)")
         }
     }
     
@@ -112,7 +114,7 @@ class AudioManager {
         guard let url = Bundle.main.url(forResource: name, withExtension: nil) ??
                         Bundle.main.url(forResource: name, withExtension: "wav") ??
                         Bundle.main.url(forResource: name, withExtension: "mp3") else {
-            print("Could not find SFX: \(name)")
+            logger.error("Could not find SFX: \(name)")
             return
         }
         
@@ -127,7 +129,7 @@ class AudioManager {
                 sfxPlayers.removeAll { !$0.isPlaying }
             }
         } catch {
-            print("Error playing SFX: \(error)")
+            logger.error("Error playing SFX: \(error.localizedDescription)")
         }
     }
     
