@@ -5,17 +5,17 @@ import SwiftUI
 class AudioManager {
     static let shared = AudioManager()
     
-    private var musicPlayer: AVAudioPlayer?
-    private var sfxPlayers: [AVAudioPlayer] = []
+    var musicPlayer: AVAudioPlayer?
+    var sfxPlayers: [AVAudioPlayer] = []
     
-    private let gameplayTracks = [
+    let gameplayTracks = [
         "game-background-1",
         "game-background-2",
         "game-background-3",
         "game-background-4"
     ]
-    private var runPlaylist: [String] = []
-    private var currentGameplayTrack: String?
+    var runPlaylist: [String] = []
+    var currentGameplayTrack: String?
     
     var isMusicMuted = false {
         didSet {
@@ -29,6 +29,15 @@ class AudioManager {
         try? AVAudioSession.sharedInstance().setActive(true)
     }
     
+    #if DEBUG
+    func resetForTesting() {
+        stopAll()
+        runPlaylist.removeAll()
+        currentGameplayTrack = nil
+        isMusicMuted = false
+    }
+    #endif
+
     // MARK: - Music
     
     func playTitleMusic() {
