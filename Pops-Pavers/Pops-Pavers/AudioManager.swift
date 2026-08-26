@@ -1,21 +1,23 @@
 import AVFoundation
 import SwiftUI
+import os
 
 @Observable
 class AudioManager {
     static let shared = AudioManager()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Pops-Pavers", category: "AudioManager")
     
-    private var musicPlayer: AVAudioPlayer?
-    private var sfxPlayers: [AVAudioPlayer] = []
+    var musicPlayer: AVAudioPlayer?
+    var sfxPlayers: [AVAudioPlayer] = []
     
-    private let gameplayTracks = [
+    let gameplayTracks = [
         "game-background-1",
         "game-background-2",
         "game-background-3",
         "game-background-4"
     ]
-    private var runPlaylist: [String] = []
-    private var currentGameplayTrack: String?
+    var runPlaylist: [String] = []
+    var currentGameplayTrack: String?
     
     var isMusicMuted = false {
         didSet {
@@ -29,6 +31,15 @@ class AudioManager {
         try? AVAudioSession.sharedInstance().setActive(true)
     }
     
+    #if DEBUG
+    func resetForTesting() {
+        stopAll()
+        runPlaylist.removeAll()
+        currentGameplayTrack = nil
+        isMusicMuted = false
+    }
+    #endif
+
     // MARK: - Music
     
     func playTitleMusic() {
@@ -82,7 +93,7 @@ class AudioManager {
     
     private func playMusic(named name: String, loop: Bool) {
         guard let url = Bundle.main.url(forResource: name, withExtension: "mp3") else {
-            print("Could not find music: \(name)")
+            logger.error("Could not find music: \(name)")
             return
         }
         
@@ -93,7 +104,7 @@ class AudioManager {
             musicPlayer?.volume = isMusicMuted ? 0 : 0.6
             musicPlayer?.play()
         } catch {
-            print("Error playing music: \(error)")
+            logger.error("Error playing music: \(error.localizedDescription)")
         }
     }
     
@@ -103,7 +114,7 @@ class AudioManager {
         guard let url = Bundle.main.url(forResource: name, withExtension: nil) ??
                         Bundle.main.url(forResource: name, withExtension: "wav") ??
                         Bundle.main.url(forResource: name, withExtension: "mp3") else {
-            print("Could not find SFX: \(name)")
+            logger.error("Could not find SFX: \(name)")
             return
         }
         
@@ -118,7 +129,7 @@ class AudioManager {
                 sfxPlayers.removeAll { !$0.isPlaying }
             }
         } catch {
-            print("Error playing SFX: \(error)")
+            logger.error("Error playing SFX: \(error.localizedDescription)")
         }
     }
     

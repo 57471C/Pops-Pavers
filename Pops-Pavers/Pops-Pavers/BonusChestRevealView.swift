@@ -246,7 +246,9 @@ struct BonusChestRevealView: View {
             displayLink.add(to: .main, forMode: .common)
 
             continuation.onTermination = { @Sendable _ in
-                proxy.invalidate()
+                Task { @MainActor in
+                    proxy.invalidate()
+                }
             }
         }
 
@@ -277,7 +279,8 @@ struct BonusChestRevealView: View {
     }
 }
 
-private final class DisplayLinkProxy: NSObject, @unchecked Sendable {
+@MainActor
+private final class DisplayLinkProxy: NSObject {
     let callback: (CADisplayLink) -> Void
     var displayLink: CADisplayLink?
 
@@ -291,10 +294,8 @@ private final class DisplayLinkProxy: NSObject, @unchecked Sendable {
     }
 
     func invalidate() {
-        DispatchQueue.main.async { [weak self] in
-            self?.displayLink?.invalidate()
-            self?.displayLink = nil
-        }
+        displayLink?.invalidate()
+        displayLink = nil
     }
 }
 
