@@ -59,4 +59,29 @@ final class FlowModelsTests: XCTestCase {
         XCTAssertFalse(gameState.inBounds(GridPos(row: 0, col: 5)))
         XCTAssertFalse(gameState.inBounds(GridPos(row: 5, col: 5)))
     }
+
+    func testEndpointColor() {
+        // Setup a level with a single pair (red from 0,0 to 0,4)
+        let level = FlowLevel(id: 1, size: 5, pairs: [FlowPair(.red, 0, 0, 0, 4)])
+        let gameState = FlowGameState(level: level)
+
+        // 1. Verify endpoint color is correctly identified
+        XCTAssertEqual(gameState.endpointColor(at: GridPos(row: 0, col: 0)), .red)
+        XCTAssertEqual(gameState.endpointColor(at: GridPos(row: 0, col: 4)), .red)
+
+        // 2. Verify empty space returns nil
+        XCTAssertNil(gameState.endpointColor(at: GridPos(row: 0, col: 1)))
+
+        // 3. Verify pipe returns nil
+        // Simulate dragging to create a pipe at (0, 1)
+        gameState.beginDrag(at: GridPos(row: 0, col: 0))
+        gameState.continueDrag(at: GridPos(row: 0, col: 1))
+
+        // At this point (0, 1) should be a pipe, not an endpoint
+        XCTAssertNil(gameState.endpointColor(at: GridPos(row: 0, col: 1)))
+
+        // 4. Verify out of bounds returns nil
+        XCTAssertNil(gameState.endpointColor(at: GridPos(row: -1, col: 0)))
+        XCTAssertNil(gameState.endpointColor(at: GridPos(row: 0, col: 5)))
+    }
 }
