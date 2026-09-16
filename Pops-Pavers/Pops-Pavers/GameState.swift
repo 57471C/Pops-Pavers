@@ -30,6 +30,13 @@ class GameState {
     private static let lifeBankKey = "lifeBank"
     private static let totalLevelsKey = "totalLevelsCompleted"
     static let pendingBankHighlightKey = "pendingBankLifeHighlight"
+    private static let backgroundNames = [
+        "game-background",
+        "game-background-1",
+        "game-background-2",
+        "game-background-3",
+        "game-background-4"
+    ]
     
     var shufflesForCurrentLevel: Int {
         max(1, (max(1, level) - 1) / 10)
@@ -76,15 +83,8 @@ class GameState {
     }
     
     func backgroundName(for level: Int) -> String {
-        let names = [
-            "game-background",
-            "game-background-1",
-            "game-background-2",
-            "game-background-3",
-            "game-background-4"
-        ]
         let index = (max(1, level) - 1) / 10
-        return names[index % names.count]
+        return Self.backgroundNames[index % Self.backgroundNames.count]
     }
     
     init(startingLevel: Int = 1) {
