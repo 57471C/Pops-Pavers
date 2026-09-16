@@ -422,19 +422,14 @@ class GameState {
         let allTiles = allTrayTiles
         var matchedIcon: String?
         
-        for i in 0..<allTiles.count {
-            let iconName = allTiles[i].iconName
-            var count = 1
-            for j in (i + 1)..<allTiles.count {
-                if allTiles[j].iconName == iconName {
-                    count += 1
-                    if count == 3 {
-                        matchedIcon = iconName
-                        break
-                    }
-                }
+        var counts = [String: Int]()
+        for tile in allTiles {
+            let iconName = tile.iconName
+            counts[iconName, default: 0] += 1
+            if counts[iconName] == 3 {
+                matchedIcon = iconName
+                break
             }
-            if matchedIcon != nil { break }
         }
 
         if let icon = matchedIcon {
